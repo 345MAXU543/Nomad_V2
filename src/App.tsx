@@ -12,12 +12,28 @@ import StudentsPage from './pages/StudentsPage'
 import './App.css'
 
 dayjs.locale('zh-tw')
+const antdLocale = (zhTW as unknown as { default?: typeof zhTW }).default ?? zhTW
 
 function App() {
   const [isDarkMode, setIsDarkMode] = useState(false)
 
   return (
-    <ConfigProvider locale={zhTW} theme={{ algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm, token: { borderRadius: 12, colorPrimary: '#3b82f6' } }}>
+    <ConfigProvider
+      locale={antdLocale}
+      theme={{
+        algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
+        token: {
+          borderRadius: 12,
+          fontSize: 16,
+          fontSizeSM: 14,
+          fontSizeLG: 18,
+          colorPrimary: isDarkMode ? '#60a5fa' : '#3b82f6',
+          colorInfo: isDarkMode ? '#60a5fa' : '#3b82f6',
+          colorLink: isDarkMode ? '#60a5fa' : '#3b82f6',
+          colorTextSecondary: isDarkMode ? '#cbd5e1' : undefined,
+        },
+      }}
+    >
       <HashRouter>
         <Routes>
           <Route element={<AppLayout isDarkMode={isDarkMode} onThemeChange={setIsDarkMode} />}>

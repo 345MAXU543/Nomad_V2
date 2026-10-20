@@ -17,7 +17,7 @@ export default function AppLayout({ isDarkMode, onThemeChange }: AppLayoutProps)
   const navigate = useNavigate()
   const location = useLocation()
   return (
-    <Layout className="app-shell" style={{ background: isDarkMode ? '#0a0a0a' : '#f5f7fa' }}>
+    <Layout className={`app-shell ${isDarkMode ? 'is-dark' : ''}`} style={{ background: isDarkMode ? '#0a0a0a' : '#f5f7fa' }}>
       <Layout.Header className="app-header" style={{ background: isDarkMode ? '#141414' : '#ffffff' }}>
         <Button type="text" className="menu-button" aria-label="開啟導覽選單" icon={<MenuOutlined />} onClick={() => setDrawerOpen(true)} />
         <Button type="text" className="brand-button" onClick={() => navigate('/')}>Nomad</Button>

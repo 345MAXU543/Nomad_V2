@@ -1,5 +1,5 @@
 import { Badge, Button, Card, Col, List, Row, Space, Statistic, Tag, Typography } from 'antd'
-import { EnvironmentOutlined } from '@ant-design/icons'
+import { EnvironmentOutlined, RightOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 
 const upcomingLessons = [
@@ -23,7 +23,7 @@ export default function DashboardPage() {
         <Col span={12}><Card className="surface-card dashboard-stat"><Statistic title="今日總堂數" value={4} suffix="堂" /></Card></Col>
         <Col span={12}><Card className="surface-card dashboard-stat"><Statistic title="待完成堂數" value={2} suffix="堂" valueStyle={{ color: '#3b82f6' }} /></Card></Col>
       </Row>
-      <Card className="surface-card" title="即將到來" extra={<Button type="link" onClick={() => navigate('/calendar')}>查看行事曆 ➔</Button>} style={{ marginBottom: 16 }}>
+      <Card className="surface-card" title="即將到來" extra={<Button type="link" onClick={() => navigate('/calendar')}>查看行事曆 <RightOutlined /></Button>} style={{ marginBottom: 16 }}>
         <List className="lesson-list" dataSource={upcomingLessons} renderItem={(lesson) => (
           <List.Item><div className="lesson-row"><div className="lesson-time">{lesson.time}</div><div className="lesson-main"><Space size={8} wrap><span className="lesson-name">{lesson.name}</span><Tag color={lesson.color}>{lesson.subject}</Tag></Space><div className="lesson-meta"><EnvironmentOutlined /> {lesson.location}</div></div></div></List.Item>
         )} />
