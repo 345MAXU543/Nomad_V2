@@ -16,7 +16,7 @@ export default function DashboardPage() {
   return (
     <>
       <section className="page-heading">
-        <Typography.Title level={2}>你好，老師 🎵</Typography.Title>
+        <Typography.Title level={2}>你好，老師 </Typography.Title>
         <Typography.Text type="secondary">2026 年 10 月 20 日 星期二</Typography.Text>
       </section>
       <Row gutter={12} style={{ marginBottom: 20 }}>

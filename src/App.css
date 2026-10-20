@@ -1,7 +1,7 @@
 .app-shell { min-height: 100vh; transition: background-color .2s ease; }
-.app-header { position: sticky; top: 0; z-index: 1000; height: 56px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 8px rgba(15, 23, 42, .08); }
-.brand-area { display: flex; align-items: center; gap: 4px; }
-.brand-button { color: inherit; font-size: 18px; font-weight: 750; letter-spacing: -.3px; padding-inline: 6px; }
+.app-header { position: sticky; top: 0; z-index: 1000; height: 56px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; line-height: normal; box-shadow: 0 2px 8px rgba(15, 23, 42, .08); }
+.menu-button { z-index: 1; }
+.brand-button { position: absolute; left: 50%; display: inline-flex; align-items: center; height: 56px; margin: 0; transform: translateX(-50%); color: inherit; font-size: 18px; font-weight: 750; letter-spacing: -.3px; line-height: normal; padding-inline: 6px; }
 .app-content { padding: 24px 16px 40px; }
 .page-container { max-width: 800px; margin: 0 auto; }
 .page-heading { margin-bottom: 20px; }
@@ -26,6 +26,10 @@
 .calendar-card .ant-picker-cell { padding: 2px 0; }
 .calendar-card .ant-picker-calendar-date-value { font-size: 13px; }
 .calendar-card .ant-picker-cell-in-view.ant-picker-cell-selected .ant-picker-calendar-date { border-radius: 8px; }
+.calendar-date-cell { min-height: 38px; text-align: center; }
+.calendar-lesson-dot { height: 7px; line-height: 0; }
+.calendar-lesson-dot .ant-badge-status-dot { margin-inline-end: 0; }
+.students-card .filter-segment { margin-bottom: 8px; }
 .form-stack .ant-form-item { margin-bottom: 18px; }
 .setting-card + .setting-card { margin-top: 16px; }
 .setting-form .ant-form-item { margin-bottom: 12px; }

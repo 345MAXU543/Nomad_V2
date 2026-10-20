@@ -1,5 +1,8 @@
 import { useState } from 'react'
 import { ConfigProvider, theme } from 'antd'
+import zhTW from 'antd/locale/zh_TW'
+import dayjs from 'dayjs'
+import 'dayjs/locale/zh-tw'
 import { HashRouter, Route, Routes } from 'react-router-dom'
 import AppLayout from './components/AppLayout'
 import CalendarPage from './pages/CalendarPage'
@@ -8,11 +11,13 @@ import SettingsPage from './pages/SettingsPage'
 import StudentsPage from './pages/StudentsPage'
 import './App.css'
 
+dayjs.locale('zh-tw')
+
 function App() {
   const [isDarkMode, setIsDarkMode] = useState(false)
 
   return (
-    <ConfigProvider theme={{ algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm, token: { borderRadius: 12, colorPrimary: '#3b82f6' } }}>
+    <ConfigProvider locale={zhTW} theme={{ algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm, token: { borderRadius: 12, colorPrimary: '#3b82f6' } }}>
       <HashRouter>
         <Routes>
           <Route element={<AppLayout isDarkMode={isDarkMode} onThemeChange={setIsDarkMode} />}>

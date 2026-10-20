@@ -6,7 +6,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 type AppLayoutProps = { isDarkMode: boolean; onThemeChange: (value: boolean) => void }
 
 const menuItems = [
-  { key: '/', icon: <TrophyOutlined />, label: '今日作戰中心' },
+  { key: '/', icon: <TrophyOutlined />, label: '主頁' },
   { key: '/calendar', icon: <CalendarOutlined />, label: '排課行事曆' },
   { key: '/students', icon: <TeamOutlined />, label: '學員管理' },
   { key: '/settings', icon: <SettingOutlined />, label: '系統設定' },
@@ -19,10 +19,8 @@ export default function AppLayout({ isDarkMode, onThemeChange }: AppLayoutProps)
   return (
     <Layout className="app-shell" style={{ background: isDarkMode ? '#0a0a0a' : '#f5f7fa' }}>
       <Layout.Header className="app-header" style={{ background: isDarkMode ? '#141414' : '#ffffff' }}>
-        <div className="brand-area">
-          <Button type="text" aria-label="開啟導覽選單" icon={<MenuOutlined />} onClick={() => setDrawerOpen(true)} />
-          <Button type="text" className="brand-button" onClick={() => navigate('/')}>Nomad 🎵</Button>
-        </div>
+        <Button type="text" className="menu-button" aria-label="開啟導覽選單" icon={<MenuOutlined />} onClick={() => setDrawerOpen(true)} />
+        <Button type="text" className="brand-button" onClick={() => navigate('/')}>Nomad</Button>
         <Switch checked={isDarkMode} onChange={onThemeChange} checkedChildren={<MoonOutlined />} unCheckedChildren={<SunOutlined />} aria-label="亮暗模式切換" />
       </Layout.Header>
       <Drawer title={<Typography.Text strong>Nomad 導覽</Typography.Text>} placement="left" width={250} open={drawerOpen} onClose={() => setDrawerOpen(false)}>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Avatar, Badge, Button, Drawer, Form, Input, List, Radio, Segmented, Select, Space, Switch, Tag, Typography } from 'antd'
+import { Avatar, Badge, Button, Card, Drawer, Form, Input, List, Radio, Segmented, Select, Space, Switch, Tag, Typography } from 'antd'
 import { PlusOutlined, UserOutlined } from '@ant-design/icons'
 
 const students = [
@@ -16,10 +16,13 @@ export default function StudentsPage() {
   return (
     <>
       <section className="page-heading"><Typography.Title level={2}>學員管理</Typography.Title><Typography.Text type="secondary">快速檢視目前在學的學員資料</Typography.Text></section>
-      <div className="students-toolbar"><Input.Search placeholder="搜尋學員姓名或科目..." /><Button type="primary" icon={<PlusOutlined />} onClick={() => openDrawer()}>新增學員</Button><Segmented className="filter-segment" options={['全部 (12)', '在學中 (10)', '暫停 (2)']} defaultValue="全部 (12)" /></div>
-      <List className="student-list" dataSource={students} renderItem={(student) => (
-        <List.Item><div className="student-card"><Avatar size={44} style={{ backgroundColor: student.color }}>{student.initial}</Avatar><div className="student-info"><div className="student-name-line"><Typography.Text strong>{student.name}</Typography.Text><Tag color="blue">{student.subject}</Tag><Badge status="success" text="在學中" /></div><div className="student-location">預設地點：{student.location}</div></div><Button type="link" onClick={() => openDrawer(student.name)}>編輯</Button></div></List.Item>
-      )} />
+      <div className="students-toolbar"><Input.Search placeholder="搜尋學員姓名或科目..." /><Button type="primary" icon={<PlusOutlined />} onClick={() => openDrawer()}>新增學員</Button></div>
+      <Card className="surface-card students-card">
+        <Segmented className="filter-segment" options={['全部 (12)', '在學中 (10)', '暫停 (2)']} defaultValue="全部 (12)" />
+        <List className="student-list" dataSource={students} renderItem={(student) => (
+          <List.Item><div className="student-card"><Avatar size={44} style={{ backgroundColor: student.color }}>{student.initial}</Avatar><div className="student-info"><div className="student-name-line"><Typography.Text strong>{student.name}</Typography.Text><Tag color="blue">{student.subject}</Tag><Badge status="success" text="在學中" /></div><div className="student-location">預設地點：{student.location}</div></div><Button type="link" onClick={() => openDrawer(student.name)}>編輯</Button></div></List.Item>
+        )} />
+      </Card>
       <Drawer title={editingName ? `編輯學員 · ${editingName}` : '新增學員'} placement="right" width={400} open={drawerOpen} onClose={() => setDrawerOpen(false)} extra={<Button type="primary" onClick={() => setDrawerOpen(false)}>儲存</Button>}>
         <Typography.Paragraph type="secondary">純視覺表單預覽，不會寫入任何資料。</Typography.Paragraph>
         <Form layout="vertical" className="form-stack">
