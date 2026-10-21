@@ -3,7 +3,7 @@ import { Button, Drawer, Layout, Menu, Switch, Typography } from 'antd'
 import { CalendarOutlined, MenuOutlined, MoonOutlined, SettingOutlined, SunOutlined, TeamOutlined, TrophyOutlined } from '@ant-design/icons'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 
-type AppLayoutProps = { isDarkMode: boolean; onThemeChange: (value: boolean) => void }
+type AppLayoutProps = { isDarkMode: boolean; onThemeToggle: () => void }
 
 const menuItems = [
   { key: '/', icon: <TrophyOutlined />, label: '主頁' },
@@ -12,7 +12,7 @@ const menuItems = [
   { key: '/settings', icon: <SettingOutlined />, label: '系統設定' },
 ]
 
-export default function AppLayout({ isDarkMode, onThemeChange }: AppLayoutProps) {
+export default function AppLayout({ isDarkMode, onThemeToggle }: AppLayoutProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
@@ -21,7 +21,7 @@ export default function AppLayout({ isDarkMode, onThemeChange }: AppLayoutProps)
       <Layout.Header className="app-header" style={{ background: isDarkMode ? '#141414' : '#ffffff' }}>
         <Button type="text" className="menu-button" aria-label="開啟導覽選單" icon={<MenuOutlined />} onClick={() => setDrawerOpen(true)} />
         <Button type="text" className="brand-button" onClick={() => navigate('/')}>Nomad</Button>
-        <Switch checked={isDarkMode} onChange={onThemeChange} checkedChildren={<MoonOutlined />} unCheckedChildren={<SunOutlined />} aria-label="亮暗模式切換" />
+        <Switch checked={isDarkMode} onChange={onThemeToggle} checkedChildren={<MoonOutlined />} unCheckedChildren={<SunOutlined />} aria-label="亮暗模式切換" />
       </Layout.Header>
       <Drawer title={<Typography.Text strong>Nomad 導覽</Typography.Text>} placement="left" width={250} open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <Menu mode="inline" selectedKeys={[location.pathname]} items={menuItems} onClick={({ key }) => { navigate(key); setDrawerOpen(false) }} />

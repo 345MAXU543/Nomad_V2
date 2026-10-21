@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { ConfigProvider, theme } from 'antd'
 import zhTW from 'antd/locale/zh_TW'
 import dayjs from 'dayjs'
@@ -9,13 +8,15 @@ import CalendarPage from './pages/CalendarPage'
 import DashboardPage from './pages/DashboardPage'
 import SettingsPage from './pages/SettingsPage'
 import StudentsPage from './pages/StudentsPage'
+import { useAppStore } from './store/useAppStore'
 import './App.css'
 
 dayjs.locale('zh-tw')
 const antdLocale = (zhTW as unknown as { default?: typeof zhTW }).default ?? zhTW
 
 function App() {
-  const [isDarkMode, setIsDarkMode] = useState(false)
+  const isDarkMode = useAppStore((state) => state.settings.isDarkMode)
+  const toggleDarkMode = useAppStore((state) => state.toggleDarkMode)
 
   return (
     <ConfigProvider
@@ -36,7 +37,7 @@ function App() {
     >
       <HashRouter>
         <Routes>
-          <Route element={<AppLayout isDarkMode={isDarkMode} onThemeChange={setIsDarkMode} />}>
+          <Route element={<AppLayout isDarkMode={isDarkMode} onThemeToggle={toggleDarkMode} />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/students" element={<StudentsPage />} />

@@ -1,7 +1,7 @@
 .app-shell { min-height: 100vh; transition: background-color .2s ease; }
 .app-header { position: sticky; top: 0; z-index: 1000; height: 56px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; line-height: normal; box-shadow: 0 2px 8px rgba(15, 23, 42, .08); }
 .menu-button { z-index: 1; }
-.brand-button { position: absolute; left: 50%; display: inline-flex; align-items: center; height: 56px; margin: 0; transform: translateX(-50%); color: inherit; font-size: 20px; font-weight: 750; letter-spacing: -.3px; line-height: normal; padding-inline: 6px; }
+.brand-button { position: absolute; left: 50%; display: inline-flex; align-items: center; height: 56px; margin: 0; transform: translateX(-50%); color: inherit; font-size: 20px; font-weight: 750; letter-spacing: -.3px; line-height: 1; padding-inline: 6px; }
 .app-content { padding: 24px 16px 40px; }
 .page-container { max-width: 800px; margin: 0 auto; }
 .page-heading { margin-bottom: 20px; }
