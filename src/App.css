@@ -45,4 +45,9 @@
 .form-stack .ant-form-item { margin-bottom: 18px; }
 .setting-card + .setting-card { margin-top: 16px; }
 .setting-form .ant-form-item { margin-bottom: 12px; }
-@media (max-width: 576px) { .app-content { padding: 16px 12px 32px; } .page-heading { margin-bottom: 16px; } .calendar-toolbar .ant-segmented { max-width: calc(100vw - 158px); overflow: hidden; } .lesson-time { width: 92px; } .lesson-row { align-items: flex-start; } }
+.stats-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.stats-metrics { margin-bottom: 16px; }
+.stats-card + .stats-card { margin-top: 16px; }
+.subject-progress + .subject-progress { margin-top: 16px; }
+.subject-progress > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+@media (max-width: 576px) { .app-content { padding: 16px 12px 32px; } .page-heading { margin-bottom: 16px; } .calendar-toolbar .ant-segmented { max-width: calc(100vw - 158px); overflow: hidden; } .lesson-time { width: 92px; } .lesson-row { align-items: flex-start; } .stats-heading { align-items: flex-start; flex-direction: column; } }

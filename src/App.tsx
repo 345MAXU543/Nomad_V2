@@ -7,6 +7,7 @@ import AppLayout from './components/AppLayout'
 import CalendarPage from './pages/CalendarPage'
 import DashboardPage from './pages/DashboardPage'
 import SettingsPage from './pages/SettingsPage'
+import StatsPage from './pages/StatsPage'
 import StudentsPage from './pages/StudentsPage'
 import { useAppStore } from './store/useAppStore'
 import './App.css'
@@ -41,6 +42,7 @@ function App() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/students" element={<StudentsPage />} />
+            <Route path="/stats" element={<StatsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Routes>

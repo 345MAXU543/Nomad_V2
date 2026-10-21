@@ -4,7 +4,9 @@ export type LocationType = '工作室' | '到府' | '線上'
 export interface Student {
   id: string
   name: string
-  subject: string
+  subjects: string[]
+  /** 舊版資料相容欄位；新資料以 subjects 為準。 */
+  subject?: string
   locationType: LocationType
   defaultLocation: string
   phone: string

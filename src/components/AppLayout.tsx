@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Button, Drawer, Layout, Menu, Switch, Typography } from 'antd'
-import { CalendarOutlined, MenuOutlined, MoonOutlined, SettingOutlined, SunOutlined, TeamOutlined, TrophyOutlined } from '@ant-design/icons'
+import { BarChartOutlined, CalendarOutlined, MenuOutlined, MoonOutlined, SettingOutlined, SunOutlined, TeamOutlined, TrophyOutlined } from '@ant-design/icons'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 type AppLayoutProps = { isDarkMode: boolean; onThemeToggle: () => void }
@@ -9,6 +9,7 @@ const menuItems = [
   { key: '/', icon: <TrophyOutlined />, label: '主頁' },
   { key: '/calendar', icon: <CalendarOutlined />, label: '排課行事曆' },
   { key: '/students', icon: <TeamOutlined />, label: '學員管理' },
+  { key: '/stats', icon: <BarChartOutlined />, label: '教學統計' },
   { key: '/settings', icon: <SettingOutlined />, label: '系統設定' },
 ]
 
