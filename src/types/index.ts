@@ -34,6 +34,7 @@ export interface AppSettings {
   defaultDuration: number
   defaultLocation: string
   isDarkMode: boolean
+  courseTypes: string[]
 }
 
 export interface BackupPayload {

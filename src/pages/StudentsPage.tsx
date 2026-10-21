@@ -5,10 +5,10 @@ import { useAppStore } from '../store/useAppStore'
 import type { Student } from '../types'
 
 type StudentFormValues = Omit<Student, 'id' | 'active'>
-const subjectOptions = ['鋼琴', '吉他', '小提琴', '編曲'].map((value) => ({ value, label: value }))
 
 export default function StudentsPage() {
   const students = useAppStore((state) => state.students)
+  const courseTypes = useAppStore((state) => state.settings.courseTypes)
   const addStudent = useAppStore((state) => state.addStudent)
   const updateStudent = useAppStore((state) => state.updateStudent)
   const deleteStudent = useAppStore((state) => state.deleteStudent)
@@ -40,7 +40,7 @@ export default function StudentsPage() {
     <Drawer title={editingStudent ? `編輯學員 · ${editingStudent.name}` : '新增學員'} placement="right" width={400} open={drawerOpen} onClose={() => setDrawerOpen(false)} extra={<Button type="primary" onClick={() => form.submit()}>{editingStudent ? '儲存' : '新增'}</Button>}>
       <Form form={form} layout="vertical" className="form-stack" onFinish={saveStudent} initialValues={{ locationType: '工作室', active: true }}>
         <Form.Item name="name" label="學員姓名" rules={[{ required: true, message: '請輸入學員姓名' }]}><Input prefix={<UserOutlined />} /></Form.Item>
-        <Form.Item name="subject" label="學習科目" rules={[{ required: true, message: '請選擇學習科目' }]}><Select options={subjectOptions} placeholder="選擇科目" /></Form.Item>
+        <Form.Item name="subject" label="學習科目" rules={[{ required: true, message: '請選擇課程種類' }]}><Select options={courseTypes.map((courseType) => ({ label: courseType, value: courseType }))} placeholder="請選擇課程種類" /></Form.Item>
         <Form.Item name="gender" label="性別"><Radio.Group><Radio value="女">女</Radio><Radio value="男">男</Radio></Radio.Group></Form.Item>
         <Form.Item name="age" label="年齡"><InputNumber min={0} max={120} style={{ width: '100%' }} /></Form.Item>
         <Form.Item name="occupation" label="職業"><Input placeholder="例如：學生、工程師" /></Form.Item>

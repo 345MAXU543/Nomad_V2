@@ -13,12 +13,22 @@ type AppState = BackupPayload & {
   deleteLesson: (id: string) => void
   updateLessonStatus: (id: string, status: LessonStatus) => void
   updateSettings: (data: Partial<AppSettings>) => void
+  addCourseType: (name: string) => void
+  renameCourseType: (oldName: string, newName: string) => void
+  deleteCourseType: (name: string) => void
   toggleDarkMode: () => void
   importData: (payload: BackupPayload) => void
   resetToDefault: () => void
 }
 
 const createId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+const defaultCourseTypes = ['鋼琴', '吉他', '小提琴', '編曲']
+const normalizeSettings = (settings: Partial<AppSettings>): AppSettings => ({
+  defaultDuration: settings.defaultDuration ?? 60,
+  defaultLocation: settings.defaultLocation ?? '教室 A',
+  isDarkMode: settings.isDarkMode ?? false,
+  courseTypes: settings.courseTypes?.length ? settings.courseTypes : defaultCourseTypes,
+})
 
 export const createSeedData = (): BackupPayload => {
   const students: Student[] = [
@@ -42,7 +52,7 @@ export const createSeedData = (): BackupPayload => {
       lesson('lesson-tomorrow-1', students[2], 1, '11:00', '12:00', 'scheduled'),
       lesson('lesson-tomorrow-2', students[3], 1, '15:30', '16:30', 'scheduled'),
     ],
-    settings: { defaultDuration: 60, defaultLocation: '教室 A', isDarkMode: false },
+    settings: normalizeSettings({}),
   }
 }
 
@@ -62,7 +72,28 @@ export const useAppStore = create<AppState>()(persist((set) => ({
   deleteLesson: (id) => set((state) => ({ lessons: state.lessons.filter((lesson) => lesson.id !== id) })),
   updateLessonStatus: (id, status) => set((state) => ({ lessons: state.lessons.map((lesson) => lesson.id === id ? { ...lesson, status } : lesson) })),
   updateSettings: (data) => set((state) => ({ settings: { ...state.settings, ...data } })),
+  addCourseType: (name) => set((state) => {
+    const trimmed = name.trim()
+    return !trimmed || state.settings.courseTypes.includes(trimmed) ? state : { settings: { ...state.settings, courseTypes: [...state.settings.courseTypes, trimmed] } }
+  }),
+  renameCourseType: (oldName, newName) => set((state) => {
+    const trimmed = newName.trim()
+    if (!trimmed || oldName === trimmed || state.settings.courseTypes.includes(trimmed)) return state
+    return {
+      settings: { ...state.settings, courseTypes: state.settings.courseTypes.map((courseType) => courseType === oldName ? trimmed : courseType) },
+      students: state.students.map((student) => student.subject === oldName ? { ...student, subject: trimmed } : student),
+      lessons: state.lessons.map((lesson) => lesson.subject === oldName ? { ...lesson, subject: trimmed } : lesson),
+    }
+  }),
+  deleteCourseType: (name) => set((state) => state.settings.courseTypes.length <= 1 ? state : { settings: { ...state.settings, courseTypes: state.settings.courseTypes.filter((courseType) => courseType !== name) } }),
   toggleDarkMode: () => set((state) => ({ settings: { ...state.settings, isDarkMode: !state.settings.isDarkMode } })),
-  importData: (payload) => set({ students: payload.students, lessons: payload.lessons, settings: payload.settings }),
+  importData: (payload) => set({ students: payload.students, lessons: payload.lessons, settings: normalizeSettings(payload.settings) }),
   resetToDefault: () => set(createSeedData()),
-}), { name: 'nomad-v2-storage', storage: createJSONStorage(() => localStorage) }))
+}), {
+  name: 'nomad-v2-storage',
+  storage: createJSONStorage(() => localStorage),
+  merge: (persistedState, currentState) => {
+    const persisted = persistedState as Partial<AppState>
+    return { ...currentState, ...persisted, settings: normalizeSettings(persisted.settings ?? currentState.settings) }
+  },
+}))
