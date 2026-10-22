@@ -19,8 +19,8 @@ export default defineConfig({
         scope: './',
         start_url: './',
         icons: [
-          { src: '/favicon.svg', sizes: '192x192', type: 'image/svg+xml' },
-          { src: '/favicon.svg', sizes: '512x512', type: 'image/svg+xml' },
+          { src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' },
+          { src: 'favicon.svg', sizes: '512x512', type: 'image/svg+xml' },
         ],
       },
     }),
