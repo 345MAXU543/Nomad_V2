@@ -29,9 +29,9 @@ function App() {
           fontSize: 16,
           fontSizeSM: 14,
           fontSizeLG: 18,
-          colorPrimary: '#00E5FF',
-          colorInfo: '#00E5FF',
-          colorLink: '#00A6BE',
+          colorPrimary: isDarkMode ? '#60a5fa' : '#3b82f6',
+          colorInfo: isDarkMode ? '#60a5fa' : '#3b82f6',
+          colorLink: isDarkMode ? '#60a5fa' : '#3b82f6',
           colorTextSecondary: isDarkMode ? '#cbd5e1' : undefined,
         },
       }}
