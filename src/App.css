@@ -41,6 +41,7 @@
 .calendar-lesson-dot { display: block; width: 6px; height: 6px; margin: 3px auto 0; border-radius: 50%; background: #1677ff; }
 .calendar-lesson-dot.is-complete { background: #52c41a; }
 .schedule-menu { width: 100%; }
+.lesson-actions { flex: 0 0 auto; }
 .students-count { display: block; margin-bottom: 8px; }
 .form-stack .ant-form-item { margin-bottom: 18px; }
 .setting-card + .setting-card { margin-top: 16px; }
@@ -50,4 +51,14 @@
 .stats-card + .stats-card { margin-top: 16px; }
 .subject-progress + .subject-progress { margin-top: 16px; }
 .subject-progress > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
-@media (max-width: 576px) { .app-content { padding: 16px 12px 32px; } .page-heading { margin-bottom: 16px; } .calendar-toolbar .ant-segmented { max-width: calc(100vw - 158px); overflow: hidden; } .lesson-time { width: 92px; } .lesson-row { align-items: flex-start; } .stats-heading { align-items: flex-start; flex-direction: column; } }
+.course-type-row { width: 100%; min-width: 0; }
+.course-type-name { min-width: 0; flex: 1; }
+.course-type-actions { flex: 0 0 auto; }
+.install-banner-spacer { height: 52px; }
+.install-banner { position: fixed; top: 0; right: 0; left: 0; z-index: 1101; min-height: 52px; padding: 8px 16px; background: #ffffff; border-bottom: 1px solid rgba(15, 23, 42, .08); box-shadow: 0 2px 8px rgba(15, 23, 42, .08); }
+.install-banner-inner { max-width: 800px; min-height: 36px; margin: 0 auto; }
+.install-banner-icon { color: #3b82f6; font-size: 20px; }
+.install-banner-message { flex: 1; min-width: 0; }
+.is-dark .install-banner { background: #141414; border-bottom-color: rgba(255, 255, 255, .12); }
+.app-shell:has(.install-banner) .app-header { top: 52px; }
+@media (max-width: 576px) { .app-content { padding: 16px 12px 32px; } .page-heading { margin-bottom: 16px; } .calendar-toolbar .ant-segmented { max-width: calc(100vw - 158px); overflow: hidden; } .lesson-time { width: 92px; } .lesson-row { align-items: flex-start; flex-wrap: wrap; } .lesson-main { flex: 1 1 150px; } .lesson-actions { width: 100%; justify-content: flex-end; margin-top: 4px; } .stats-heading { align-items: flex-start; flex-direction: column; } .install-banner { padding-inline: 12px; } .install-banner-message { font-size: 14px; } .course-type-actions .ant-btn { padding-inline: 4px; } }
