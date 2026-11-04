@@ -102,6 +102,8 @@ export default function CalendarPage() {
   const [lessonDrawerOpen, setLessonDrawerOpen] = useState(false)
   const [commuteDrawerOpen, setCommuteDrawerOpen] = useState(false)
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null)
+  const [recurringDeleteLesson, setRecurringDeleteLesson] = useState<Lesson | null>(null)
+  const [excludedDates, setExcludedDates] = useState<string[]>([])
   const [form] = Form.useForm<LessonFormValues>()
 
   const selectedStudentId = Form.useWatch('studentId', form)
@@ -157,6 +159,7 @@ export default function CalendarPage() {
 
   const openNewLesson = () => {
     setEditingLesson(null)
+    setExcludedDates([])
     const fallbackFee = settings.defaultFee ?? 1200
     form.setFieldsValue({
       date: selectedDate,
@@ -178,6 +181,7 @@ export default function CalendarPage() {
 
   const openEditLesson = (lesson: Lesson) => {
     setEditingLesson(lesson)
+    setExcludedDates([])
     const student = students.find((item) => item.id === lesson.studentId)
     form.setFieldsValue({
       studentId: lesson.studentId,
@@ -203,12 +207,14 @@ export default function CalendarPage() {
     // 週期性排課邏輯
     if (!editingLesson && values.isRecurring) {
       const recurringGroupId = `rec-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
-      const targetItems = values.skipConflictDates
+      const candidateItems = values.skipConflictDates
         ? recurringPreview.filter((p) => p.conflicts.length === 0)
         : recurringPreview
 
+      const targetItems = candidateItems.filter((p) => !excludedDates.includes(p.dateStr))
+
       if (targetItems.length === 0) {
-        void message.warning('所有預訂日期皆與現有行程衝突，且已選擇自動跳過，未建立任何排課')
+        void message.warning('所有預訂日期皆已被略過或與現有行程衝突，未建立任何排課')
         return
       }
 
@@ -275,39 +281,10 @@ export default function CalendarPage() {
     void message.success(nextStatus === 'paid' ? `已標記 ${lesson.studentName} 為已收款` : `已標記 ${lesson.studentName} 為待收款`)
   }
 
-  const handleDeleteLesson = (lesson: Lesson) => {
-    if (!lesson.recurringGroupId) {
-      deleteLesson(lesson.id)
-      void message.success('已刪除排課')
-      return
-    }
-
-    Modal.confirm({
-      title: '刪除週期性排課',
-      content: `【${lesson.studentName}】這堂課屬於循環排課系列，請選擇刪除範圍：`,
-      okText: '僅刪除此堂',
-      cancelText: '取消',
-      footer: (_, { OkBtn, CancelBtn }) => (
-        <Space style={{ marginTop: 16 }}>
-          <CancelBtn />
-          <Button
-            danger
-            onClick={() => {
-              deleteRecurringLessons(lesson.recurringGroupId!, lesson.date)
-              Modal.destroyAll()
-              void message.success('已刪除此堂與後續所有週期課程')
-            }}
-          >
-            刪除本堂及往後全部
-          </Button>
-          <OkBtn />
-        </Space>
-      ),
-      onOk: () => {
-        deleteLesson(lesson.id)
-        void message.success('已刪除此堂課程')
-      },
-    })
+  const toggleExcludeDate = (dateStr: string) => {
+    setExcludedDates((prev) =>
+      prev.includes(dateStr) ? prev.filter((d) => d !== dateStr) : [...prev, dateStr]
+    )
   }
 
   const renderLesson = (lesson: Lesson) => {
@@ -360,7 +337,7 @@ export default function CalendarPage() {
             />
             <Button type="link" size="small" onClick={() => openEditLesson(lesson)}>編輯</Button>
             {lesson.recurringGroupId ? (
-              <Button danger type="text" size="small" onClick={() => handleDeleteLesson(lesson)}>刪除</Button>
+              <Button danger type="text" size="small" onClick={() => setRecurringDeleteLesson(lesson)}>刪除</Button>
             ) : (
               <Popconfirm
                 title="確定刪除此排課？"
@@ -553,25 +530,37 @@ export default function CalendarPage() {
                     showIcon
                     style={{ marginBottom: 12 }}
                     message={`衝堂提醒：系列中有 ${conflictCount} 堂課與現有行程時間重疊`}
-                    description="您可選擇自動略過衝堂日，或全部照常排入後續再微調。"
+                    description="您可選擇自動略過衝堂日，或點擊個別日期標籤切換排除／排入。"
                   />
                 )}
 
                 {/* 即將排入的日期預覽 chips */}
                 <div style={{ marginBottom: 12 }}>
                   <Typography.Text type="secondary" style={{ fontSize: 13, display: 'block', marginBottom: 6 }}>
-                    <CalendarOutlined style={{ marginRight: 4 }} />預覽排入日期清單 ({recurringPreview.length} 堂)：
+                    <CalendarOutlined style={{ marginRight: 4 }} />
+                    預覽排入日期清單（點擊可個別略過/恢復）：
                   </Typography.Text>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 120, overflowY: 'auto', padding: 4 }}>
-                    {recurringPreview.map((item) => (
-                      <Tag
-                        key={item.dateStr}
-                        color={item.conflicts.length > 0 ? 'warning' : 'blue'}
-                        style={{ padding: '2px 8px', fontSize: 12 }}
-                      >
-                        {item.dayLabel} {item.conflicts.length > 0 ? `⚠️ 與 ${item.conflicts.map((c) => c.studentName).join('、')} 重疊` : '✓'}
-                      </Tag>
-                    ))}
+                    {recurringPreview.map((item) => {
+                      const isExcluded = excludedDates.includes(item.dateStr)
+                      return (
+                        <Tag
+                          key={item.dateStr}
+                          color={isExcluded ? 'default' : item.conflicts.length > 0 ? 'warning' : 'blue'}
+                          style={{
+                            padding: '3px 8px',
+                            fontSize: 12,
+                            cursor: 'pointer',
+                            textDecoration: isExcluded ? 'line-through' : 'none',
+                            opacity: isExcluded ? 0.45 : 1,
+                          }}
+                          onClick={() => toggleExcludeDate(item.dateStr)}
+                          title="點擊排除或恢復此日期"
+                        >
+                          {item.dayLabel} {item.conflicts.length > 0 ? `⚠️ 與 ${item.conflicts.map((c) => c.studentName).join('、')} 重疊` : isExcluded ? '(已排除)' : '✓'}
+                        </Tag>
+                      )
+                    })}
                   </div>
                 </div>
 
@@ -600,5 +589,52 @@ export default function CalendarPage() {
         <Form.Item label="目的地"><Input /></Form.Item>
       </Form>
     </Drawer>
+
+    {/* 週期性課程刪除確認 Modal（受控狀態，保證在任何情境下都能穩定彈出） */}
+    <Modal
+      title="刪除週期性排課"
+      open={Boolean(recurringDeleteLesson)}
+      onCancel={() => setRecurringDeleteLesson(null)}
+      footer={
+        <Space style={{ marginTop: 12 }}>
+          <Button onClick={() => setRecurringDeleteLesson(null)}>取消</Button>
+          <Button
+            type="primary"
+            onClick={() => {
+              if (recurringDeleteLesson) {
+                deleteLesson(recurringDeleteLesson.id)
+                setRecurringDeleteLesson(null)
+                void message.success('已刪除此堂課程')
+              }
+            }}
+          >
+            僅刪除此堂課
+          </Button>
+          <Button
+            danger
+            type="primary"
+            onClick={() => {
+              if (recurringDeleteLesson && recurringDeleteLesson.recurringGroupId) {
+                deleteRecurringLessons(recurringDeleteLesson.recurringGroupId, recurringDeleteLesson.date)
+                setRecurringDeleteLesson(null)
+                void message.success('已刪除此堂與後續所有週期課程')
+              }
+            }}
+          >
+            刪除本堂及往後全部
+          </Button>
+        </Space>
+      }
+    >
+      <div style={{ padding: '8px 0' }}>
+        <p>
+          學員：<strong>{recurringDeleteLesson?.studentName}</strong>（{recurringDeleteLesson?.subject}）
+        </p>
+        <p style={{ color: '#8c8c8c' }}>
+          上課時間：{recurringDeleteLesson?.date} {recurringDeleteLesson?.startTime} - {recurringDeleteLesson?.endTime}
+        </p>
+        <p style={{ marginTop: 12 }}>這堂課屬於循環規律排課系列，請選擇您想執行的刪除範圍：</p>
+      </div>
+    </Modal>
   </>
 }
