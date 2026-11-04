@@ -57,6 +57,7 @@ export default function CalendarPage() {
 
   const openNewLesson = () => {
     setEditingLesson(null)
+    const fallbackFee = settings.defaultFee ?? 1200
     form.setFieldsValue({
       date: selectedDate,
       location: settings.defaultLocation,
@@ -65,7 +66,7 @@ export default function CalendarPage() {
       studentId: undefined,
       subject: undefined,
       notes: undefined,
-      fee: undefined,
+      fee: fallbackFee,
       paymentStatus: 'unpaid',
     })
     setLessonDrawerOpen(true)
@@ -73,6 +74,7 @@ export default function CalendarPage() {
 
   const openEditLesson = (lesson: Lesson) => {
     setEditingLesson(lesson)
+    const student = students.find((item) => item.id === lesson.studentId)
     form.setFieldsValue({
       studentId: lesson.studentId,
       subject: lesson.subject,
@@ -81,7 +83,7 @@ export default function CalendarPage() {
       endTime: toTime(lesson.endTime),
       location: lesson.location,
       notes: lesson.notes,
-      fee: lesson.fee,
+      fee: lesson.fee !== undefined ? lesson.fee : (student?.defaultFee ?? settings.defaultFee ?? 1200),
       paymentStatus: lesson.paymentStatus ?? 'unpaid',
     })
     setLessonDrawerOpen(true)
@@ -90,6 +92,7 @@ export default function CalendarPage() {
   const submitLesson = (values: LessonFormValues) => {
     const student = students.find((item) => item.id === values.studentId)
     if (!student) return
+    const fallbackFee = student.defaultFee ?? settings.defaultFee ?? 1200
     const data = {
       studentId: student.id,
       studentName: student.name,
@@ -99,7 +102,7 @@ export default function CalendarPage() {
       endTime: values.endTime.format('HH:mm'),
       location: values.location,
       notes: values.notes,
-      fee: values.fee !== undefined ? values.fee : (student.defaultFee ?? 0),
+      fee: values.fee !== undefined ? values.fee : fallbackFee,
       paymentStatus: values.paymentStatus ?? 'unpaid',
       status: editingLesson?.status ?? ('scheduled' as LessonStatus),
     }
@@ -114,9 +117,8 @@ export default function CalendarPage() {
       if (student) {
         form.setFieldValue('location', student.defaultLocation)
         form.setFieldValue('subject', student.subjects[0])
-        if (student.defaultFee !== undefined) {
-          form.setFieldValue('fee', student.defaultFee)
-        }
+        const studentFee = student.defaultFee ?? settings.defaultFee ?? 1200
+        form.setFieldValue('fee', studentFee)
       }
     }
     if (changed.startTime && !form.getFieldValue('endTime')) {

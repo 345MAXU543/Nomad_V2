@@ -42,6 +42,7 @@ export interface Lesson {
 export interface AppSettings {
   defaultDuration: number
   defaultLocation: string
+  defaultFee?: number
   isDarkMode: boolean
   courseTypes: string[]
 }

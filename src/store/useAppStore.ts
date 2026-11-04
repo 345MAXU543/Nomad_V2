@@ -28,6 +28,7 @@ const defaultCourseTypes = ['鋼琴', '吉他', '小提琴', '編曲']
 const normalizeSettings = (settings: Partial<AppSettings>): AppSettings => ({
   defaultDuration: settings.defaultDuration ?? 60,
   defaultLocation: settings.defaultLocation ?? '教室 A',
+  defaultFee: settings.defaultFee ?? 1200,
   isDarkMode: settings.isDarkMode ?? false,
   courseTypes: settings.courseTypes?.length ? settings.courseTypes : defaultCourseTypes,
 })
@@ -38,7 +39,13 @@ const normalizeStudent = (student: StoredStudent): Student => {
   const subjects = Array.isArray(student.subjects) && student.subjects.length > 0
     ? [...new Set(student.subjects.filter(Boolean))]
     : student.subject ? [student.subject] : [defaultCourseTypes[0]]
-  return { ...student, subjects, subject: student.subject ?? subjects[0] }
+  return {
+    ...student,
+    subjects,
+    subject: student.subject ?? subjects[0],
+    defaultFee: student.defaultFee !== undefined ? student.defaultFee : 1200,
+    billingCycle: student.billingCycle ?? 'monthly',
+  }
 }
 
 export const createSeedData = (): BackupPayload => {
@@ -80,7 +87,7 @@ export const useAppStore = create<AppState>()(persist((set) => ({
   toggleStudentActive: (id) => set((state) => ({ students: state.students.map((student) => student.id === id ? { ...student, active: !student.active } : student) })),
   addLesson: (lesson) => set((state) => {
     const student = state.students.find((s) => s.id === lesson.studentId)
-    const fee = lesson.fee !== undefined ? lesson.fee : (student?.defaultFee ?? 0)
+    const fee = lesson.fee !== undefined ? lesson.fee : (student?.defaultFee ?? state.settings.defaultFee ?? 1200)
     return { lessons: [...state.lessons, { ...lesson, fee, paymentStatus: lesson.paymentStatus ?? 'unpaid', id: createId() }] }
   }),
   updateLesson: (id, data) => set((state) => ({ lessons: state.lessons.map((lesson) => lesson.id === id ? { ...lesson, ...data } : lesson) })),
@@ -122,7 +129,7 @@ export const useAppStore = create<AppState>()(persist((set) => ({
   toggleDarkMode: () => set((state) => ({ settings: { ...state.settings, isDarkMode: !state.settings.isDarkMode } })),
   importData: (payload) => set({
     students: payload.students.map((student) => normalizeStudent(student)),
-    lessons: payload.lessons.map((lesson) => ({ ...lesson, paymentStatus: lesson.paymentStatus ?? 'unpaid' })),
+    lessons: payload.lessons.map((lesson) => ({ ...lesson, fee: lesson.fee !== undefined ? lesson.fee : 1200, paymentStatus: lesson.paymentStatus ?? 'unpaid' })),
     settings: normalizeSettings(payload.settings),
   }),
   resetToDefault: () => set(createSeedData()),
@@ -135,7 +142,7 @@ export const useAppStore = create<AppState>()(persist((set) => ({
       ...currentState,
       ...persisted,
       students: persisted.students ? persisted.students.map((student) => normalizeStudent(student)) : currentState.students,
-      lessons: persisted.lessons ? persisted.lessons.map((l) => ({ ...l, paymentStatus: l.paymentStatus ?? 'unpaid' })) : currentState.lessons,
+      lessons: persisted.lessons ? persisted.lessons.map((l) => ({ ...l, fee: l.fee !== undefined ? l.fee : 1200, paymentStatus: l.paymentStatus ?? 'unpaid' })) : currentState.lessons,
       settings: normalizeSettings(persisted.settings ?? currentState.settings),
     }
   },
