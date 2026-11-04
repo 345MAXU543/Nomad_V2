@@ -37,6 +37,7 @@ export interface Lesson {
   fee?: number
   paymentStatus?: PaymentStatus
   paidAt?: string
+  recurringGroupId?: string
 }
 
 export interface AppSettings {

@@ -1,7 +1,39 @@
 import { useMemo, useState } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
-import { Button, Calendar, Card, DatePicker, Drawer, Empty, Flex, Form, Input, InputNumber, List, Popconfirm, Segmented, Select, Space, Tag, TimePicker, Typography, message, type CalendarProps } from 'antd'
-import { DollarOutlined, PlusOutlined } from '@ant-design/icons'
+import {
+  Alert,
+  Button,
+  Calendar,
+  Card,
+  Checkbox,
+  DatePicker,
+  Drawer,
+  Empty,
+  Flex,
+  Form,
+  Input,
+  InputNumber,
+  List,
+  Modal,
+  Popconfirm,
+  Radio,
+  Segmented,
+  Select,
+  Space,
+  Switch,
+  Tag,
+  TimePicker,
+  Typography,
+  message,
+  type CalendarProps,
+} from 'antd'
+import {
+  AlertOutlined,
+  CalendarOutlined,
+  DollarOutlined,
+  PlusOutlined,
+  SyncOutlined,
+} from '@ant-design/icons'
 import zhTW from 'antd/locale/zh_TW'
 import { useAppStore } from '../store/useAppStore'
 import type { Lesson, LessonStatus, PaymentStatus } from '../types'
@@ -17,11 +49,38 @@ type LessonFormValues = {
   fee?: number
   paymentStatus?: PaymentStatus
   notes?: string
+  isRecurring?: boolean
+  recurringFrequency?: 'weekly' | 'biweekly'
+  recurringCount?: number
+  skipConflictDates?: boolean
 }
 
 const antdLocale = (zhTW as unknown as { default?: typeof zhTW }).default ?? zhTW
-const calendarLocale = { ...antdLocale.Calendar, lang: { ...antdLocale.Calendar?.lang, locale: 'zh-tw', shortWeekDays: ['日', '一', '二', '三', '四', '五', '六'] } } as CalendarProps<Dayjs>['locale']
+const calendarLocale = {
+  ...antdLocale.Calendar,
+  lang: { ...antdLocale.Calendar?.lang, locale: 'zh-tw', shortWeekDays: ['日', '一', '二', '三', '四', '五', '六'] },
+} as CalendarProps<Dayjs>['locale']
 const toTime = (time: string) => dayjs(`${dayjs().format('YYYY-MM-DD')}T${time}`)
+
+const isTimeOverlapping = (startA: string, endA: string, startB: string, endB: string): boolean => {
+  return startA < endB && endA > startB
+}
+
+const findConflicts = (
+  date: string,
+  startTime: string,
+  endTime: string,
+  allLessons: Lesson[],
+  excludeLessonId?: string
+): Lesson[] => {
+  if (!date || !startTime || !endTime) return []
+  return allLessons.filter((lesson) => {
+    if (lesson.id === excludeLessonId) return false
+    if (lesson.date !== date) return false
+    if (lesson.status === 'leave') return false
+    return isTimeOverlapping(startTime, endTime, lesson.startTime, lesson.endTime)
+  })
+}
 
 export default function CalendarPage() {
   const students = useAppStore((state) => state.students)
@@ -29,8 +88,10 @@ export default function CalendarPage() {
   const settings = useAppStore((state) => state.settings)
   const courseTypes = useAppStore((state) => state.settings.courseTypes)
   const addLesson = useAppStore((state) => state.addLesson)
+  const addLessons = useAppStore((state) => state.addLessons)
   const updateLesson = useAppStore((state) => state.updateLesson)
   const deleteLesson = useAppStore((state) => state.deleteLesson)
+  const deleteRecurringLessons = useAppStore((state) => state.deleteRecurringLessons)
   const updateLessonStatus = useAppStore((state) => state.updateLessonStatus)
   const updateLessonPaymentStatus = useAppStore((state) => state.updateLessonPaymentStatus)
 
@@ -42,7 +103,15 @@ export default function CalendarPage() {
   const [commuteDrawerOpen, setCommuteDrawerOpen] = useState(false)
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null)
   const [form] = Form.useForm<LessonFormValues>()
+
   const selectedStudentId = Form.useWatch('studentId', form)
+  const formDate = Form.useWatch('date', form)
+  const formStartTime = Form.useWatch('startTime', form)
+  const formEndTime = Form.useWatch('endTime', form)
+  const formIsRecurring = Form.useWatch('isRecurring', form)
+  const formFrequency = Form.useWatch('recurringFrequency', form) ?? 'weekly'
+  const formCount = Form.useWatch('recurringCount', form) ?? 4
+
   const selectedStudent = students.find((student) => student.id === selectedStudentId)
 
   const lessonSubjectOptions: DefaultOptionType[] = selectedStudent
@@ -52,8 +121,39 @@ export default function CalendarPage() {
       ]
     : courseTypes.map((courseType) => ({ label: courseType, value: courseType }))
 
-  const selectedLessons = useMemo(() => lessons.filter((lesson) => lesson.date === selectedDate.format('YYYY-MM-DD')).sort((a, b) => a.startTime.localeCompare(b.startTime)), [lessons, selectedDate])
-  const listedLessons = useMemo(() => lessons.filter((lesson) => statusFilter === 'all' || lesson.status === statusFilter).sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`)), [lessons, statusFilter])
+  const selectedLessons = useMemo(
+    () => lessons.filter((lesson) => lesson.date === selectedDate.format('YYYY-MM-DD')).sort((a, b) => a.startTime.localeCompare(b.startTime)),
+    [lessons, selectedDate]
+  )
+
+  const listedLessons = useMemo(
+    () => lessons.filter((lesson) => statusFilter === 'all' || lesson.status === statusFilter).sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`)),
+    [lessons, statusFilter]
+  )
+
+  // 週期性排課與衝堂即時計算（純內嵌提示，不彈窗）
+  const recurringPreview = useMemo(() => {
+    if (!formDate || !formStartTime || !formEndTime) return []
+    const count = formIsRecurring ? Math.min(Math.max(1, Number(formCount) || 4), 24) : 1
+    const stepDays = formFrequency === 'biweekly' ? 14 : 7
+    const startTimeStr = formStartTime.format('HH:mm')
+    const endTimeStr = formEndTime.format('HH:mm')
+
+    const list: { dateStr: string; dayLabel: string; conflicts: Lesson[] }[] = []
+    for (let i = 0; i < count; i++) {
+      const curDate = formDate.add(i * stepDays, 'day')
+      const dateStr = curDate.format('YYYY-MM-DD')
+      const dayLabel = curDate.format('MM/DD (dd)')
+      const conflicts = findConflicts(dateStr, startTimeStr, endTimeStr, lessons, editingLesson?.id)
+      list.push({ dateStr, dayLabel, conflicts })
+    }
+    return list
+  }, [formDate, formStartTime, formEndTime, formIsRecurring, formFrequency, formCount, lessons, editingLesson])
+
+  const conflictCount = useMemo(
+    () => recurringPreview.filter((item) => item.conflicts.length > 0).length,
+    [recurringPreview]
+  )
 
   const openNewLesson = () => {
     setEditingLesson(null)
@@ -68,6 +168,10 @@ export default function CalendarPage() {
       notes: undefined,
       fee: fallbackFee,
       paymentStatus: 'unpaid',
+      isRecurring: false,
+      recurringFrequency: 'weekly',
+      recurringCount: 4,
+      skipConflictDates: false,
     })
     setLessonDrawerOpen(true)
   }
@@ -85,6 +189,7 @@ export default function CalendarPage() {
       notes: lesson.notes,
       fee: lesson.fee !== undefined ? lesson.fee : (student?.defaultFee ?? settings.defaultFee ?? 1200),
       paymentStatus: lesson.paymentStatus ?? 'unpaid',
+      isRecurring: false,
     })
     setLessonDrawerOpen(true)
   }
@@ -93,6 +198,42 @@ export default function CalendarPage() {
     const student = students.find((item) => item.id === values.studentId)
     if (!student) return
     const fallbackFee = student.defaultFee ?? settings.defaultFee ?? 1200
+    const fee = values.fee !== undefined ? values.fee : fallbackFee
+
+    // 週期性排課邏輯
+    if (!editingLesson && values.isRecurring) {
+      const recurringGroupId = `rec-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+      const targetItems = values.skipConflictDates
+        ? recurringPreview.filter((p) => p.conflicts.length === 0)
+        : recurringPreview
+
+      if (targetItems.length === 0) {
+        void message.warning('所有預訂日期皆與現有行程衝突，且已選擇自動跳過，未建立任何排課')
+        return
+      }
+
+      const batchLessons = targetItems.map((item) => ({
+        studentId: student.id,
+        studentName: student.name,
+        subject: values.subject,
+        date: item.dateStr,
+        startTime: values.startTime.format('HH:mm'),
+        endTime: values.endTime.format('HH:mm'),
+        location: values.location,
+        notes: values.notes,
+        fee,
+        paymentStatus: values.paymentStatus ?? 'unpaid',
+        status: 'scheduled' as LessonStatus,
+        recurringGroupId,
+      }))
+
+      addLessons(batchLessons)
+      setLessonDrawerOpen(false)
+      void message.success(`已成功建立 ${batchLessons.length} 堂週期性排課`)
+      return
+    }
+
+    // 單堂排課 / 編輯既有排課
     const data = {
       studentId: student.id,
       studentName: student.name,
@@ -102,10 +243,12 @@ export default function CalendarPage() {
       endTime: values.endTime.format('HH:mm'),
       location: values.location,
       notes: values.notes,
-      fee: values.fee !== undefined ? values.fee : fallbackFee,
+      fee,
       paymentStatus: values.paymentStatus ?? 'unpaid',
       status: editingLesson?.status ?? ('scheduled' as LessonStatus),
+      recurringGroupId: editingLesson?.recurringGroupId,
     }
+
     if (editingLesson) updateLesson(editingLesson.id, data); else addLesson(data)
     setLessonDrawerOpen(false)
     void message.success(editingLesson ? '課程已更新' : '排課已新增')
@@ -132,58 +275,110 @@ export default function CalendarPage() {
     void message.success(nextStatus === 'paid' ? `已標記 ${lesson.studentName} 為已收款` : `已標記 ${lesson.studentName} 為待收款`)
   }
 
-  const renderLesson = (lesson: Lesson) => (
-    <List.Item key={lesson.id}>
-      <div className="lesson-row">
-        <div className="schedule-list-date">
-          {dayjs(lesson.date).format('MM/DD')}<br />
-          <span>{lesson.startTime} - {lesson.endTime}</span>
-        </div>
-        <div className="lesson-main">
-          <Space size={8} wrap align="center">
-            <span className="lesson-name">{lesson.studentName}</span>
-            <Tag color="blue">{lesson.subject}</Tag>
-            {lesson.fee !== undefined ? (
-              <Tag
-                color={lesson.paymentStatus === 'paid' ? 'success' : lesson.paymentStatus === 'waived' ? 'default' : 'warning'}
-                style={{ cursor: 'pointer', userSelect: 'none' }}
-                title="點擊切換 待收 / 已收"
-                onClick={() => togglePayment(lesson)}
-              >
-                <DollarOutlined /> NT$ {lesson.fee.toLocaleString()} · {lesson.paymentStatus === 'paid' ? '已收' : lesson.paymentStatus === 'waived' ? '免收' : '待收'}
-              </Tag>
-            ) : null}
-          </Space>
-          <div className="lesson-meta">{lesson.location}</div>
-        </div>
-        <Space className="lesson-actions" size={4} wrap>
-          <Select
-            size="small"
-            value={lesson.status}
-            style={{ width: 90 }}
-            options={[
-              { value: 'scheduled', label: '待上課' },
-              { value: 'completed', label: '完課' },
-              { value: 'leave', label: '請假' },
-            ]}
-            onChange={(status: LessonStatus) => updateLessonStatus(lesson.id, status)}
-          />
-          <Button type="link" size="small" onClick={() => openEditLesson(lesson)}>編輯</Button>
-          <Popconfirm
-            title="確定刪除此排課？"
-            okText="刪除"
-            cancelText="取消"
-            onConfirm={() => {
-              deleteLesson(lesson.id)
-              void message.success('已刪除排課')
+  const handleDeleteLesson = (lesson: Lesson) => {
+    if (!lesson.recurringGroupId) {
+      deleteLesson(lesson.id)
+      void message.success('已刪除排課')
+      return
+    }
+
+    Modal.confirm({
+      title: '刪除週期性排課',
+      content: `【${lesson.studentName}】這堂課屬於循環排課系列，請選擇刪除範圍：`,
+      okText: '僅刪除此堂',
+      cancelText: '取消',
+      footer: (_, { OkBtn, CancelBtn }) => (
+        <Space style={{ marginTop: 16 }}>
+          <CancelBtn />
+          <Button
+            danger
+            onClick={() => {
+              deleteRecurringLessons(lesson.recurringGroupId!, lesson.date)
+              Modal.destroyAll()
+              void message.success('已刪除此堂與後續所有週期課程')
             }}
           >
-            <Button danger type="text" size="small">刪除</Button>
-          </Popconfirm>
+            刪除本堂及往後全部
+          </Button>
+          <OkBtn />
         </Space>
-      </div>
-    </List.Item>
-  )
+      ),
+      onOk: () => {
+        deleteLesson(lesson.id)
+        void message.success('已刪除此堂課程')
+      },
+    })
+  }
+
+  const renderLesson = (lesson: Lesson) => {
+    const conflicts = findConflicts(lesson.date, lesson.startTime, lesson.endTime, lessons, lesson.id)
+    const hasConflict = conflicts.length > 0
+
+    return (
+      <List.Item key={lesson.id}>
+        <div className="lesson-row">
+          <div className="schedule-list-date">
+            {dayjs(lesson.date).format('MM/DD')}<br />
+            <span>{lesson.startTime} - {lesson.endTime}</span>
+          </div>
+          <div className="lesson-main">
+            <Space size={6} wrap align="center">
+              <span className="lesson-name">{lesson.studentName}</span>
+              <Tag color="blue">{lesson.subject}</Tag>
+              {lesson.recurringGroupId ? (
+                <Tag color="purple" icon={<SyncOutlined />}>循環</Tag>
+              ) : null}
+              {hasConflict ? (
+                <Tag color="error" icon={<AlertOutlined />} title={`與 ${conflicts.map((c) => c.studentName).join('、')} 衝堂`}>
+                  衝堂
+                </Tag>
+              ) : null}
+              {lesson.fee !== undefined ? (
+                <Tag
+                  color={lesson.paymentStatus === 'paid' ? 'success' : lesson.paymentStatus === 'waived' ? 'default' : 'warning'}
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  title="點擊切換 待收 / 已收"
+                  onClick={() => togglePayment(lesson)}
+                >
+                  <DollarOutlined /> NT$ {lesson.fee.toLocaleString()} · {lesson.paymentStatus === 'paid' ? '已收' : lesson.paymentStatus === 'waived' ? '免收' : '待收'}
+                </Tag>
+              ) : null}
+            </Space>
+            <div className="lesson-meta">{lesson.location}</div>
+          </div>
+          <Space className="lesson-actions" size={4} wrap>
+            <Select
+              size="small"
+              value={lesson.status}
+              style={{ width: 90 }}
+              options={[
+                { value: 'scheduled', label: '待上課' },
+                { value: 'completed', label: '完課' },
+                { value: 'leave', label: '請假' },
+              ]}
+              onChange={(status: LessonStatus) => updateLessonStatus(lesson.id, status)}
+            />
+            <Button type="link" size="small" onClick={() => openEditLesson(lesson)}>編輯</Button>
+            {lesson.recurringGroupId ? (
+              <Button danger type="text" size="small" onClick={() => handleDeleteLesson(lesson)}>刪除</Button>
+            ) : (
+              <Popconfirm
+                title="確定刪除此排課？"
+                okText="刪除"
+                cancelText="取消"
+                onConfirm={() => {
+                  deleteLesson(lesson.id)
+                  void message.success('已刪除排課')
+                }}
+              >
+                <Button danger type="text" size="small">刪除</Button>
+              </Popconfirm>
+            )}
+          </Space>
+        </div>
+      </List.Item>
+    )
+  }
 
   return <>
     <Flex className="calendar-toolbar" justify="space-between" align="center">
@@ -242,12 +437,19 @@ export default function CalendarPage() {
     <Drawer
       title={editingLesson ? '編輯排課' : '新增排課'}
       placement="right"
-      width={400}
+      width={440}
       open={lessonDrawerOpen}
       onClose={() => setLessonDrawerOpen(false)}
       extra={<Button type="primary" onClick={() => form.submit()}>{editingLesson ? '儲存' : '新增'}</Button>}
     >
-      <Form form={form} layout="vertical" className="form-stack" onFinish={submitLesson} onValuesChange={onValuesChange}>
+      <Form
+        form={form}
+        layout="vertical"
+        className="form-stack"
+        onFinish={submitLesson}
+        onValuesChange={onValuesChange}
+        initialValues={{ isRecurring: false, recurringFrequency: 'weekly', recurringCount: 4, skipConflictDates: false }}
+      >
         <Form.Item name="studentId" label="學員" rules={[{ required: true, message: '請選擇學員' }]}>
           <Select placeholder="選擇學員" options={students.map((student) => ({ value: student.id, label: `${student.name}・${student.subjects.join('、')}` }))} />
         </Form.Item>
@@ -277,6 +479,110 @@ export default function CalendarPage() {
         <Form.Item name="endTime" label="結束時間" rules={[{ required: true, message: '請選擇結束時間' }]}>
           <TimePicker style={{ width: '100%' }} format="HH:mm" />
         </Form.Item>
+
+        {/* 衝突提示（單堂，非侵入式內嵌提示，不彈大彈窗） */}
+        {!formIsRecurring && conflictCount > 0 && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="時段衝突提醒"
+            description={
+              <div>
+                此時段與現有行程時間重疊：
+                {recurringPreview[0]?.conflicts.map((c) => (
+                  <div key={c.id}>
+                    • <strong>{c.studentName}</strong> ({c.subject}) {c.startTime} - {c.endTime}
+                  </div>
+                ))}
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  * 您仍可直接送出預排，後續再行微調。
+                </Typography.Text>
+              </div>
+            }
+          />
+        )}
+
+        {/* 週期性重複排課選項（僅新增排課時可用） */}
+        {!editingLesson && (
+          <Card size="small" style={{ marginBottom: 16, background: 'rgba(59, 130, 246, 0.04)', borderColor: 'rgba(59, 130, 246, 0.2)' }}>
+            <Flex justify="space-between" align="center" style={{ marginBottom: formIsRecurring ? 12 : 0 }}>
+              <Space>
+                <SyncOutlined style={{ color: '#3b82f6' }} />
+                <Typography.Text strong>週期性規律排課</Typography.Text>
+              </Space>
+              <Form.Item name="isRecurring" valuePropName="checked" noStyle>
+                <Switch />
+              </Form.Item>
+            </Flex>
+
+            {formIsRecurring && (
+              <>
+                <Form.Item name="recurringFrequency" label="重複頻率" style={{ marginBottom: 12 }}>
+                  <Radio.Group optionType="button" buttonStyle="solid">
+                    <Radio.Button value="weekly">每週</Radio.Button>
+                    <Radio.Button value="biweekly">隔週 (每 2 週)</Radio.Button>
+                  </Radio.Group>
+                </Form.Item>
+
+                <Form.Item label="排課堂數" style={{ marginBottom: 12 }}>
+                  <Space wrap align="center">
+                    <Radio.Group
+                      value={[4, 8, 12].includes(formCount) ? formCount : 'custom'}
+                      onChange={(e) => {
+                        if (e.target.value !== 'custom') {
+                          form.setFieldValue('recurringCount', e.target.value)
+                        }
+                      }}
+                    >
+                      <Radio.Button value={4}>4 堂</Radio.Button>
+                      <Radio.Button value={8}>8 堂</Radio.Button>
+                      <Radio.Button value={12}>12 堂</Radio.Button>
+                      <Radio.Button value="custom">自訂</Radio.Button>
+                    </Radio.Group>
+                    <Form.Item name="recurringCount" noStyle>
+                      <InputNumber min={1} max={24} style={{ width: 80 }} placeholder="堂數" />
+                    </Form.Item>
+                  </Space>
+                </Form.Item>
+
+                {/* 衝突內嵌警告（安靜不擾民，零彈跳） */}
+                {conflictCount > 0 && (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    style={{ marginBottom: 12 }}
+                    message={`衝堂提醒：系列中有 ${conflictCount} 堂課與現有行程時間重疊`}
+                    description="您可選擇自動略過衝堂日，或全部照常排入後續再微調。"
+                  />
+                )}
+
+                {/* 即將排入的日期預覽 chips */}
+                <div style={{ marginBottom: 12 }}>
+                  <Typography.Text type="secondary" style={{ fontSize: 13, display: 'block', marginBottom: 6 }}>
+                    <CalendarOutlined style={{ marginRight: 4 }} />預覽排入日期清單 ({recurringPreview.length} 堂)：
+                  </Typography.Text>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 120, overflowY: 'auto', padding: 4 }}>
+                    {recurringPreview.map((item) => (
+                      <Tag
+                        key={item.dateStr}
+                        color={item.conflicts.length > 0 ? 'warning' : 'blue'}
+                        style={{ padding: '2px 8px', fontSize: 12 }}
+                      >
+                        {item.dayLabel} {item.conflicts.length > 0 ? `⚠️ 與 ${item.conflicts.map((c) => c.studentName).join('、')} 重疊` : '✓'}
+                      </Tag>
+                    ))}
+                  </div>
+                </div>
+
+                <Form.Item name="skipConflictDates" valuePropName="checked" style={{ marginBottom: 0 }}>
+                  <Checkbox>自動略過衝堂日期（僅排入無衝突的堂數）</Checkbox>
+                </Form.Item>
+              </>
+            )}
+          </Card>
+        )}
+
         <Form.Item name="location" label="上課地點" rules={[{ required: true, message: '請輸入地點' }]}>
           <Input />
         </Form.Item>

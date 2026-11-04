@@ -9,8 +9,10 @@ type AppState = BackupPayload & {
   deleteStudent: (id: string) => void
   toggleStudentActive: (id: string) => void
   addLesson: (lesson: Omit<Lesson, 'id'>) => void
+  addLessons: (lessons: Omit<Lesson, 'id'>[]) => void
   updateLesson: (id: string, data: Partial<Lesson>) => void
   deleteLesson: (id: string) => void
+  deleteRecurringLessons: (recurringGroupId: string, fromDate?: string) => void
   updateLessonStatus: (id: string, status: LessonStatus) => void
   updateLessonPaymentStatus: (id: string, status: PaymentStatus) => void
   batchUpdateLessonPaymentStatus: (ids: string[], status: PaymentStatus) => void
@@ -90,8 +92,28 @@ export const useAppStore = create<AppState>()(persist((set) => ({
     const fee = lesson.fee !== undefined ? lesson.fee : (student?.defaultFee ?? state.settings.defaultFee ?? 1200)
     return { lessons: [...state.lessons, { ...lesson, fee, paymentStatus: lesson.paymentStatus ?? 'unpaid', id: createId() }] }
   }),
+  addLessons: (newLessons) => set((state) => {
+    const prepared = newLessons.map((lesson) => {
+      const student = state.students.find((s) => s.id === lesson.studentId)
+      const fee = lesson.fee !== undefined ? lesson.fee : (student?.defaultFee ?? state.settings.defaultFee ?? 1200)
+      return {
+        ...lesson,
+        fee,
+        paymentStatus: lesson.paymentStatus ?? 'unpaid',
+        id: createId(),
+      }
+    })
+    return { lessons: [...state.lessons, ...prepared] }
+  }),
   updateLesson: (id, data) => set((state) => ({ lessons: state.lessons.map((lesson) => lesson.id === id ? { ...lesson, ...data } : lesson) })),
   deleteLesson: (id) => set((state) => ({ lessons: state.lessons.filter((lesson) => lesson.id !== id) })),
+  deleteRecurringLessons: (recurringGroupId, fromDate) => set((state) => ({
+    lessons: state.lessons.filter((lesson) => {
+      if (lesson.recurringGroupId !== recurringGroupId) return true
+      if (fromDate && lesson.date < fromDate) return true
+      return false
+    }),
+  })),
   updateLessonStatus: (id, status) => set((state) => ({ lessons: state.lessons.map((lesson) => lesson.id === id ? { ...lesson, status } : lesson) })),
   updateLessonPaymentStatus: (id, paymentStatus) => set((state) => ({
     lessons: state.lessons.map((lesson) => lesson.id === id ? { ...lesson, paymentStatus, paidAt: paymentStatus === 'paid' ? dayjs().format('YYYY-MM-DD HH:mm') : undefined } : lesson),

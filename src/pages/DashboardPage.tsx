@@ -1,11 +1,15 @@
 import dayjs from 'dayjs'
 import { Badge, Button, Card, Col, Empty, List, Row, Space, Statistic, Tag, Typography, message } from 'antd'
-import { DollarOutlined, EnvironmentOutlined, RightOutlined } from '@ant-design/icons'
+import { AlertOutlined, DollarOutlined, EnvironmentOutlined, RightOutlined, SyncOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../store/useAppStore'
 import type { Lesson, PaymentStatus } from '../types'
 
 const statusText = { scheduled: '待上課', completed: '已完課', leave: '請假' } as const
+
+const isTimeOverlapping = (startA: string, endA: string, startB: string, endB: string): boolean => {
+  return startA < endB && endA > startB
+}
 
 export default function DashboardPage() {
   const navigate = useNavigate()
@@ -31,6 +35,15 @@ export default function DashboardPage() {
     const nextStatus: PaymentStatus = lesson.paymentStatus === 'paid' ? 'unpaid' : 'paid'
     updateLessonPaymentStatus(lesson.id, nextStatus)
     void message.success(nextStatus === 'paid' ? `已標記 ${lesson.studentName} 為已收款` : `已標記 ${lesson.studentName} 為待收款`)
+  }
+
+  const checkConflict = (target: Lesson) => {
+    return lessons.some((lesson) => {
+      if (lesson.id === target.id) return false
+      if (lesson.date !== target.date) return false
+      if (lesson.status === 'leave') return false
+      return isTimeOverlapping(target.startTime, target.endTime, lesson.startTime, lesson.endTime)
+    })
   }
 
   return <>
@@ -67,31 +80,40 @@ export default function DashboardPage() {
         <List
           className="lesson-list"
           dataSource={upcoming}
-          renderItem={(lesson) => (
-            <List.Item>
-              <div className="lesson-row">
-                <div className="lesson-time">{lesson.startTime} - {lesson.endTime}</div>
-                <div className="lesson-main">
-                  <Space size={8} wrap align="center">
-                    <span className="lesson-name">{lesson.studentName}</span>
-                    <Tag color="blue">{lesson.subject}</Tag>
-                    {lesson.fee !== undefined ? (
-                      <Tag
-                        color={lesson.paymentStatus === 'paid' ? 'success' : lesson.paymentStatus === 'waived' ? 'default' : 'warning'}
-                        style={{ cursor: 'pointer', userSelect: 'none' }}
-                        title="點擊切換 待收 / 已收"
-                        onClick={() => togglePayment(lesson)}
-                      >
-                        <DollarOutlined /> NT$ {lesson.fee.toLocaleString()} · {lesson.paymentStatus === 'paid' ? '已收' : lesson.paymentStatus === 'waived' ? '免收' : '待收'}
-                      </Tag>
-                    ) : null}
-                  </Space>
-                  <div className="lesson-meta"><EnvironmentOutlined /> {lesson.location}</div>
+          renderItem={(lesson) => {
+            const hasConflict = checkConflict(lesson)
+            return (
+              <List.Item>
+                <div className="lesson-row">
+                  <div className="lesson-time">{lesson.startTime} - {lesson.endTime}</div>
+                  <div className="lesson-main">
+                    <Space size={6} wrap align="center">
+                      <span className="lesson-name">{lesson.studentName}</span>
+                      <Tag color="blue">{lesson.subject}</Tag>
+                      {lesson.recurringGroupId ? (
+                        <Tag color="purple" icon={<SyncOutlined />}>循環</Tag>
+                      ) : null}
+                      {hasConflict ? (
+                        <Tag color="error" icon={<AlertOutlined />}>衝堂</Tag>
+                      ) : null}
+                      {lesson.fee !== undefined ? (
+                        <Tag
+                          color={lesson.paymentStatus === 'paid' ? 'success' : lesson.paymentStatus === 'waived' ? 'default' : 'warning'}
+                          style={{ cursor: 'pointer', userSelect: 'none' }}
+                          title="點擊切換 待收 / 已收"
+                          onClick={() => togglePayment(lesson)}
+                        >
+                          <DollarOutlined /> NT$ {lesson.fee.toLocaleString()} · {lesson.paymentStatus === 'paid' ? '已收' : lesson.paymentStatus === 'waived' ? '免收' : '待收'}
+                        </Tag>
+                      ) : null}
+                    </Space>
+                    <div className="lesson-meta"><EnvironmentOutlined /> {lesson.location}</div>
+                  </div>
+                  <Badge status="processing" text={statusText[lesson.status]} />
                 </div>
-                <Badge status="processing" text={statusText[lesson.status]} />
-              </div>
-            </List.Item>
-          )}
+              </List.Item>
+            )
+          }}
         />
       )}
     </Card>
@@ -101,36 +123,45 @@ export default function DashboardPage() {
         <List
           className="lesson-list"
           dataSource={pending}
-          renderItem={(lesson) => (
-            <List.Item>
-              <div className="lesson-row">
-                <div className="lesson-time">
-                  {dayjs(lesson.date).format('MM/DD')}<br />{lesson.startTime}
-                </div>
-                <div className="lesson-main">
-                  <Space size={8} wrap align="center">
-                    <span className="lesson-name">{lesson.studentName}</span>
-                    <Tag>{lesson.subject}</Tag>
-                    {lesson.fee !== undefined ? (
-                      <Tag
-                        color={lesson.paymentStatus === 'paid' ? 'success' : lesson.paymentStatus === 'waived' ? 'default' : 'warning'}
-                        style={{ cursor: 'pointer', userSelect: 'none' }}
-                        title="點擊切換 待收 / 已收"
-                        onClick={() => togglePayment(lesson)}
-                      >
-                        <DollarOutlined /> NT$ {lesson.fee.toLocaleString()} · {lesson.paymentStatus === 'paid' ? '已收' : lesson.paymentStatus === 'waived' ? '免收' : '待收'}
-                      </Tag>
-                    ) : null}
+          renderItem={(lesson) => {
+            const hasConflict = checkConflict(lesson)
+            return (
+              <List.Item>
+                <div className="lesson-row">
+                  <div className="lesson-time">
+                    {dayjs(lesson.date).format('MM/DD')}<br />{lesson.startTime}
+                  </div>
+                  <div className="lesson-main">
+                    <Space size={6} wrap align="center">
+                      <span className="lesson-name">{lesson.studentName}</span>
+                      <Tag>{lesson.subject}</Tag>
+                      {lesson.recurringGroupId ? (
+                        <Tag color="purple" icon={<SyncOutlined />}>循環</Tag>
+                      ) : null}
+                      {hasConflict ? (
+                        <Tag color="error" icon={<AlertOutlined />}>衝堂</Tag>
+                      ) : null}
+                      {lesson.fee !== undefined ? (
+                        <Tag
+                          color={lesson.paymentStatus === 'paid' ? 'success' : lesson.paymentStatus === 'waived' ? 'default' : 'warning'}
+                          style={{ cursor: 'pointer', userSelect: 'none' }}
+                          title="點擊切換 待收 / 已收"
+                          onClick={() => togglePayment(lesson)}
+                        >
+                          <DollarOutlined /> NT$ {lesson.fee.toLocaleString()} · {lesson.paymentStatus === 'paid' ? '已收' : lesson.paymentStatus === 'waived' ? '免收' : '待收'}
+                        </Tag>
+                      ) : null}
+                    </Space>
+                    <div className="lesson-meta">{lesson.location}</div>
+                  </div>
+                  <Space size={6}>
+                    <Button type="primary" size="small" onClick={() => markStatus(lesson.id, 'completed')}>完課</Button>
+                    <Button danger size="small" onClick={() => markStatus(lesson.id, 'leave')}>請假</Button>
                   </Space>
-                  <div className="lesson-meta">{lesson.location}</div>
                 </div>
-                <Space size={6}>
-                  <Button type="primary" size="small" onClick={() => markStatus(lesson.id, 'completed')}>完課</Button>
-                  <Button danger size="small" onClick={() => markStatus(lesson.id, 'leave')}>請假</Button>
-                </Space>
-              </div>
-            </List.Item>
-          )}
+              </List.Item>
+            )
+          }}
         />
       )}
     </Card>
