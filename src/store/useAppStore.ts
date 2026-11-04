@@ -1,7 +1,7 @@
 import dayjs from 'dayjs'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import type { AppSettings, BackupPayload, Lesson, LessonStatus, Student } from '../types'
+import type { AppSettings, BackupPayload, Lesson, LessonStatus, PaymentStatus, Student } from '../types'
 
 type AppState = BackupPayload & {
   addStudent: (student: Omit<Student, 'id'>) => void
@@ -12,6 +12,8 @@ type AppState = BackupPayload & {
   updateLesson: (id: string, data: Partial<Lesson>) => void
   deleteLesson: (id: string) => void
   updateLessonStatus: (id: string, status: LessonStatus) => void
+  updateLessonPaymentStatus: (id: string, status: PaymentStatus) => void
+  batchUpdateLessonPaymentStatus: (ids: string[], status: PaymentStatus) => void
   updateSettings: (data: Partial<AppSettings>) => void
   addCourseType: (name: string) => void
   renameCourseType: (oldName: string, newName: string) => void
@@ -41,25 +43,25 @@ const normalizeStudent = (student: StoredStudent): Student => {
 
 export const createSeedData = (): BackupPayload => {
   const students: Student[] = [
-    { id: 'student-lin', name: '林小安', subjects: ['鋼琴', '編曲'], locationType: '工作室', defaultLocation: '教室 A', phone: '0912-345-678', active: true, avatarColor: '#7c3aed', gender: '女' },
-    { id: 'student-chen', name: '陳宇恩', subjects: ['吉他', '小提琴'], locationType: '到府', defaultLocation: '到府授課・中山區', phone: '0922-345-678', active: true, avatarColor: '#0f766e', gender: '男' },
-    { id: 'student-huang', name: '黃以樂', subjects: ['鋼琴'], locationType: '工作室', defaultLocation: '教室 B', phone: '0932-345-678', active: true, avatarColor: '#2563eb', gender: '女' },
-    { id: 'student-wu', name: '吳子謙', subjects: ['吉他'], locationType: '線上', defaultLocation: '線上課程', phone: '0942-345-678', active: true, avatarColor: '#db2777', gender: '男' },
+    { id: 'student-lin', name: '林小安', subjects: ['鋼琴', '編曲'], locationType: '工作室', defaultLocation: '教室 A', phone: '0912-345-678', active: true, avatarColor: '#7c3aed', gender: '女', defaultFee: 1200, billingCycle: 'monthly' },
+    { id: 'student-chen', name: '陳宇恩', subjects: ['吉他', '小提琴'], locationType: '到府', defaultLocation: '到府授課・中山區', phone: '0922-345-678', active: true, avatarColor: '#0f766e', gender: '男', defaultFee: 1400, billingCycle: 'perLesson' },
+    { id: 'student-huang', name: '黃以樂', subjects: ['鋼琴'], locationType: '工作室', defaultLocation: '教室 B', phone: '0932-345-678', active: true, avatarColor: '#2563eb', gender: '女', defaultFee: 1000, billingCycle: 'monthly' },
+    { id: 'student-wu', name: '吳子謙', subjects: ['吉他'], locationType: '線上', defaultLocation: '線上課程', phone: '0942-345-678', active: true, avatarColor: '#db2777', gender: '男', defaultFee: 900, billingCycle: 'perLesson' },
   ]
   const today = dayjs()
-  const lesson = (id: string, student: Student, offset: number, startTime: string, endTime: string, status: LessonStatus): Lesson => ({
-    id, studentId: student.id, studentName: student.name, subject: student.subjects[0], date: today.add(offset, 'day').format('YYYY-MM-DD'), startTime, endTime, location: student.defaultLocation, status,
+  const lesson = (id: string, student: Student, offset: number, startTime: string, endTime: string, status: LessonStatus, paymentStatus: PaymentStatus = 'unpaid'): Lesson => ({
+    id, studentId: student.id, studentName: student.name, subject: student.subjects[0], date: today.add(offset, 'day').format('YYYY-MM-DD'), startTime, endTime, location: student.defaultLocation, status, fee: student.defaultFee ?? 1000, paymentStatus,
   })
   return {
     students,
     lessons: [
-      lesson('lesson-today-1', students[0], 0, '10:00', '11:00', 'scheduled'),
-      lesson('lesson-today-2', students[1], 0, '14:00', '15:00', 'scheduled'),
-      lesson('lesson-today-3', students[2], 0, '18:30', '19:30', 'completed'),
-      lesson('lesson-yesterday', students[3], -1, '16:00', '17:00', 'scheduled'),
-      lesson('lesson-before-yesterday', students[0], -2, '19:00', '20:00', 'scheduled'),
-      lesson('lesson-tomorrow-1', students[2], 1, '11:00', '12:00', 'scheduled'),
-      lesson('lesson-tomorrow-2', students[3], 1, '15:30', '16:30', 'scheduled'),
+      lesson('lesson-today-1', students[0], 0, '10:00', '11:00', 'scheduled', 'paid'),
+      lesson('lesson-today-2', students[1], 0, '14:00', '15:00', 'scheduled', 'unpaid'),
+      lesson('lesson-today-3', students[2], 0, '18:30', '19:30', 'completed', 'paid'),
+      lesson('lesson-yesterday', students[3], -1, '16:00', '17:00', 'scheduled', 'unpaid'),
+      lesson('lesson-before-yesterday', students[0], -2, '19:00', '20:00', 'scheduled', 'paid'),
+      lesson('lesson-tomorrow-1', students[2], 1, '11:00', '12:00', 'scheduled', 'unpaid'),
+      lesson('lesson-tomorrow-2', students[3], 1, '15:30', '16:30', 'scheduled', 'unpaid'),
     ],
     settings: normalizeSettings({}),
   }
@@ -76,10 +78,20 @@ export const useAppStore = create<AppState>()(persist((set) => ({
   }),
   deleteStudent: (id) => set((state) => ({ students: state.students.filter((student) => student.id !== id), lessons: state.lessons.filter((lesson) => lesson.studentId !== id) })),
   toggleStudentActive: (id) => set((state) => ({ students: state.students.map((student) => student.id === id ? { ...student, active: !student.active } : student) })),
-  addLesson: (lesson) => set((state) => ({ lessons: [...state.lessons, { ...lesson, id: createId() }] })),
+  addLesson: (lesson) => set((state) => {
+    const student = state.students.find((s) => s.id === lesson.studentId)
+    const fee = lesson.fee !== undefined ? lesson.fee : (student?.defaultFee ?? 0)
+    return { lessons: [...state.lessons, { ...lesson, fee, paymentStatus: lesson.paymentStatus ?? 'unpaid', id: createId() }] }
+  }),
   updateLesson: (id, data) => set((state) => ({ lessons: state.lessons.map((lesson) => lesson.id === id ? { ...lesson, ...data } : lesson) })),
   deleteLesson: (id) => set((state) => ({ lessons: state.lessons.filter((lesson) => lesson.id !== id) })),
   updateLessonStatus: (id, status) => set((state) => ({ lessons: state.lessons.map((lesson) => lesson.id === id ? { ...lesson, status } : lesson) })),
+  updateLessonPaymentStatus: (id, paymentStatus) => set((state) => ({
+    lessons: state.lessons.map((lesson) => lesson.id === id ? { ...lesson, paymentStatus, paidAt: paymentStatus === 'paid' ? dayjs().format('YYYY-MM-DD HH:mm') : undefined } : lesson),
+  })),
+  batchUpdateLessonPaymentStatus: (ids, paymentStatus) => set((state) => ({
+    lessons: state.lessons.map((lesson) => ids.includes(lesson.id) ? { ...lesson, paymentStatus, paidAt: paymentStatus === 'paid' ? dayjs().format('YYYY-MM-DD HH:mm') : undefined } : lesson),
+  })),
   updateSettings: (data) => set((state) => ({ settings: { ...state.settings, ...data } })),
   addCourseType: (name) => set((state) => {
     const trimmed = name.trim()
@@ -108,7 +120,11 @@ export const useAppStore = create<AppState>()(persist((set) => ({
     }
   }),
   toggleDarkMode: () => set((state) => ({ settings: { ...state.settings, isDarkMode: !state.settings.isDarkMode } })),
-  importData: (payload) => set({ students: payload.students.map((student) => normalizeStudent(student)), lessons: payload.lessons, settings: normalizeSettings(payload.settings) }),
+  importData: (payload) => set({
+    students: payload.students.map((student) => normalizeStudent(student)),
+    lessons: payload.lessons.map((lesson) => ({ ...lesson, paymentStatus: lesson.paymentStatus ?? 'unpaid' })),
+    settings: normalizeSettings(payload.settings),
+  }),
   resetToDefault: () => set(createSeedData()),
 }), {
   name: 'nomad-v2-storage',
@@ -119,6 +135,7 @@ export const useAppStore = create<AppState>()(persist((set) => ({
       ...currentState,
       ...persisted,
       students: persisted.students ? persisted.students.map((student) => normalizeStudent(student)) : currentState.students,
+      lessons: persisted.lessons ? persisted.lessons.map((l) => ({ ...l, paymentStatus: l.paymentStatus ?? 'unpaid' })) : currentState.lessons,
       settings: normalizeSettings(persisted.settings ?? currentState.settings),
     }
   },

@@ -1,5 +1,7 @@
 export type LessonStatus = 'scheduled' | 'completed' | 'leave'
 export type LocationType = '工作室' | '到府' | '線上'
+export type PaymentStatus = 'unpaid' | 'paid' | 'waived'
+export type BillingCycle = 'perLesson' | 'monthly'
 
 export interface Student {
   id: string
@@ -17,6 +19,8 @@ export interface Student {
   age?: number
   occupation?: string
   lineId?: string
+  defaultFee?: number
+  billingCycle?: BillingCycle
 }
 
 export interface Lesson {
@@ -30,6 +34,9 @@ export interface Lesson {
   location: string
   status: LessonStatus
   notes?: string
+  fee?: number
+  paymentStatus?: PaymentStatus
+  paidAt?: string
 }
 
 export interface AppSettings {
