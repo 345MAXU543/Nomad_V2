@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
 import {
   Alert,
@@ -97,6 +97,8 @@ export default function CalendarPage() {
   const updateLessonStatus = useAppStore((state) => state.updateLessonStatus)
   const markLeaveWaived = useAppStore((state) => state.markLeaveWaived)
   const updateLessonPaymentStatus = useAppStore((state) => state.updateLessonPaymentStatus)
+  const pendingMakeupLessonId = useAppStore((state) => state.pendingMakeupLessonId)
+  const setPendingMakeupLessonId = useAppStore((state) => state.setPendingMakeupLessonId)
 
   const [viewMode, setViewMode] = useState<'月檢視' | '列表檢視'>('月檢視')
   const [selectedDate, setSelectedDate] = useState(dayjs())
@@ -118,7 +120,9 @@ export default function CalendarPage() {
   const formFrequency = Form.useWatch('recurringFrequency', form) ?? 'weekly'
   const formCount = Form.useWatch('recurringCount', form) ?? 4
 
-  const selectedStudent = students.find((student) => student.id === selectedStudentId)
+  const selectedStudent = students.find(
+    (student) => student.id === (selectedStudentId || makeupForLesson?.studentId)
+  )
 
   const lessonSubjectOptions: DefaultOptionType[] = selectedStudent
     ? [
@@ -204,8 +208,6 @@ export default function CalendarPage() {
     setLessonDrawerOpen(true)
   }
 
-  const makeupHandledRef = useRef<string | null>(null)
-
   const openMakeupLesson = useCallback((leaveLesson: Lesson) => {
     setEditingLesson(null)
     setMakeupForLesson(leaveLesson)
@@ -229,23 +231,27 @@ export default function CalendarPage() {
 
   // 接收來自外部頁面（如 Dashboard）傳遞進來的補課請求
   useEffect(() => {
-    const stateObj = location.state as { makeupLessonId?: string } | null
-    const targetId = stateObj?.makeupLessonId
-    if (targetId && makeupHandledRef.current !== targetId) {
-      makeupHandledRef.current = targetId
+    const targetId = pendingMakeupLessonId || (location.state as { makeupLessonId?: string } | null)?.makeupLessonId
+    if (targetId) {
       const leaveLesson = lessons.find((l) => l.id === targetId)
       if (leaveLesson) {
-        window.history.replaceState({}, document.title)
         const timer = setTimeout(() => {
           openMakeupLesson(leaveLesson)
         }, 0)
+        if (pendingMakeupLessonId) {
+          setPendingMakeupLessonId(null)
+        }
         return () => clearTimeout(timer)
       }
+      if (pendingMakeupLessonId) {
+        setPendingMakeupLessonId(null)
+      }
     }
-  }, [location.state, lessons, openMakeupLesson])
+  }, [pendingMakeupLessonId, location.state, lessons, openMakeupLesson, setPendingMakeupLessonId])
 
   const submitLesson = (values: LessonFormValues) => {
-    const student = students.find((item) => item.id === values.studentId)
+    const targetStudentId = values.studentId || makeupForLesson?.studentId
+    const student = students.find((item) => item.id === targetStudentId)
     if (!student) return
     const fallbackFee = student.defaultFee ?? settings.defaultFee ?? 1200
     const fee = values.fee !== undefined ? values.fee : fallbackFee

@@ -4,6 +4,8 @@ import { createJSONStorage, persist } from 'zustand/middleware'
 import type { AppSettings, BackupPayload, Lesson, LessonStatus, PaymentStatus, Student } from '../types'
 
 type AppState = BackupPayload & {
+  pendingMakeupLessonId: string | null
+  setPendingMakeupLessonId: (id: string | null) => void
   addStudent: (student: Omit<Student, 'id'>) => void
   updateStudent: (id: string, data: Partial<Student>) => void
   deleteStudent: (id: string) => void
@@ -79,6 +81,8 @@ export const createSeedData = (): BackupPayload => {
 
 export const useAppStore = create<AppState>()(persist((set) => ({
   ...createSeedData(),
+  pendingMakeupLessonId: null,
+  setPendingMakeupLessonId: (id) => set({ pendingMakeupLessonId: id }),
   addStudent: (student) => set((state) => ({ students: [...state.students, normalizeStudent({ ...student, id: createId() })] })),
   updateStudent: (id, data) => set((state) => {
     const updated = state.students.map((student) => student.id === id ? normalizeStudent({ ...student, ...data }) : student)

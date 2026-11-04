@@ -17,6 +17,7 @@ export default function DashboardPage() {
   const updateLessonStatus = useAppStore((state) => state.updateLessonStatus)
   const updateLessonPaymentStatus = useAppStore((state) => state.updateLessonPaymentStatus)
   const markLeaveWaived = useAppStore((state) => state.markLeaveWaived)
+  const setPendingMakeupLessonId = useAppStore((state) => state.setPendingMakeupLessonId)
 
   const today = dayjs().format('YYYY-MM-DD')
   const todayLessons = lessons.filter((lesson) => lesson.date === today)
@@ -161,7 +162,10 @@ export default function DashboardPage() {
                   <Button
                     type="primary"
                     size="small"
-                    onClick={() => navigate('/calendar', { state: { makeupLessonId: lesson.id } })}
+                    onClick={() => {
+                      setPendingMakeupLessonId(lesson.id)
+                      navigate('/calendar')
+                    }}
                   >
                     安排補課
                   </Button>
