@@ -38,6 +38,9 @@ export interface Lesson {
   paymentStatus?: PaymentStatus
   paidAt?: string
   recurringGroupId?: string
+  isMakeup?: boolean
+  rescheduledLessonId?: string
+  makeupForLessonId?: string
 }
 
 export interface AppSettings {

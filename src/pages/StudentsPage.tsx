@@ -8,6 +8,7 @@ type StudentFormValues = Omit<Student, 'id' | 'active' | 'subject'>
 
 export default function StudentsPage() {
   const students = useAppStore((state) => state.students)
+  const lessons = useAppStore((state) => state.lessons)
   const courseTypes = useAppStore((state) => state.settings.courseTypes)
   const addStudent = useAppStore((state) => state.addStudent)
   const updateStudent = useAppStore((state) => state.updateStudent)
@@ -70,29 +71,38 @@ export default function StudentsPage() {
         className="student-list"
         dataSource={visibleStudents}
         locale={{ emptyText: '找不到符合的學員' }}
-        renderItem={(student) => (
-          <List.Item>
-            <div className="student-card">
-              <Avatar size={44} style={{ backgroundColor: student.avatarColor ?? '#3b82f6' }}>{student.name.slice(0, 1)}</Avatar>
-              <div className="student-info">
-                <div className="student-name-line">
-                  <Typography.Text strong>{student.name}</Typography.Text>
-                  {student.subjects.map((subject) => <Tag color="blue" key={subject}>{subject}</Tag>)}
-                  {student.defaultFee ? (
-                    <Tag color="cyan">
-                      <DollarOutlined /> NT$ {student.defaultFee.toLocaleString()} / 堂
-                    </Tag>
-                  ) : null}
-                  {student.billingCycle ? (
-                    <Tag>{student.billingCycle === 'monthly' ? '月結' : '單堂'}</Tag>
-                  ) : null}
+        renderItem={(student) => {
+          const pendingMakeupCount = lessons.filter(
+            (l) => l.studentId === student.id && l.status === 'leave' && !l.rescheduledLessonId
+          ).length
+
+          return (
+            <List.Item>
+              <div className="student-card">
+                <Avatar size={44} style={{ backgroundColor: student.avatarColor ?? '#3b82f6' }}>{student.name.slice(0, 1)}</Avatar>
+                <div className="student-info">
+                  <div className="student-name-line">
+                    <Typography.Text strong>{student.name}</Typography.Text>
+                    {student.subjects.map((subject) => <Tag color="blue" key={subject}>{subject}</Tag>)}
+                    {student.defaultFee ? (
+                      <Tag color="cyan">
+                        <DollarOutlined /> NT$ {student.defaultFee.toLocaleString()} / 堂
+                      </Tag>
+                    ) : null}
+                    {student.billingCycle ? (
+                      <Tag>{student.billingCycle === 'monthly' ? '月結' : '單堂'}</Tag>
+                    ) : null}
+                    {pendingMakeupCount > 0 ? (
+                      <Tag color="volcano">待補 {pendingMakeupCount} 堂</Tag>
+                    ) : null}
+                  </div>
+                  <div className="student-location">預設地點：{student.defaultLocation || '未設定'}</div>
                 </div>
-                <div className="student-location">預設地點：{student.defaultLocation || '未設定'}</div>
+                <Button type="link" onClick={() => openDrawer(student)}>編輯</Button>
               </div>
-              <Button type="link" onClick={() => openDrawer(student)}>編輯</Button>
-            </div>
-          </List.Item>
-        )}
+            </List.Item>
+          )
+        }}
       />
     </Card>
     <Drawer

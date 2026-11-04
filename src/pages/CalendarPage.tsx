@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
 import {
   Alert,
@@ -35,6 +35,7 @@ import {
   SyncOutlined,
 } from '@ant-design/icons'
 import zhTW from 'antd/locale/zh_TW'
+import { useLocation } from 'react-router-dom'
 import { useAppStore } from '../store/useAppStore'
 import type { Lesson, LessonStatus, PaymentStatus } from '../types'
 import type { DefaultOptionType } from 'antd/es/select'
@@ -83,6 +84,7 @@ const findConflicts = (
 }
 
 export default function CalendarPage() {
+  const location = useLocation()
   const students = useAppStore((state) => state.students)
   const lessons = useAppStore((state) => state.lessons)
   const settings = useAppStore((state) => state.settings)
@@ -93,6 +95,7 @@ export default function CalendarPage() {
   const deleteLesson = useAppStore((state) => state.deleteLesson)
   const deleteRecurringLessons = useAppStore((state) => state.deleteRecurringLessons)
   const updateLessonStatus = useAppStore((state) => state.updateLessonStatus)
+  const markLeaveWaived = useAppStore((state) => state.markLeaveWaived)
   const updateLessonPaymentStatus = useAppStore((state) => state.updateLessonPaymentStatus)
 
   const [viewMode, setViewMode] = useState<'月檢視' | '列表檢視'>('月檢視')
@@ -103,6 +106,7 @@ export default function CalendarPage() {
   const [commuteDrawerOpen, setCommuteDrawerOpen] = useState(false)
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null)
   const [recurringDeleteLesson, setRecurringDeleteLesson] = useState<Lesson | null>(null)
+  const [makeupForLesson, setMakeupForLesson] = useState<Lesson | null>(null)
   const [excludedDates, setExcludedDates] = useState<string[]>([])
   const [form] = Form.useForm<LessonFormValues>()
 
@@ -159,6 +163,7 @@ export default function CalendarPage() {
 
   const openNewLesson = () => {
     setEditingLesson(null)
+    setMakeupForLesson(null)
     setExcludedDates([])
     const fallbackFee = settings.defaultFee ?? 1200
     form.setFieldsValue({
@@ -181,6 +186,7 @@ export default function CalendarPage() {
 
   const openEditLesson = (lesson: Lesson) => {
     setEditingLesson(lesson)
+    setMakeupForLesson(null)
     setExcludedDates([])
     const student = students.find((item) => item.id === lesson.studentId)
     form.setFieldsValue({
@@ -198,11 +204,74 @@ export default function CalendarPage() {
     setLessonDrawerOpen(true)
   }
 
+  const makeupHandledRef = useRef<string | null>(null)
+
+  const openMakeupLesson = useCallback((leaveLesson: Lesson) => {
+    setEditingLesson(null)
+    setMakeupForLesson(leaveLesson)
+    setExcludedDates([])
+    const proposedDate = selectedDate.isBefore(dayjs().subtract(1, 'day')) ? dayjs().add(1, 'day') : selectedDate
+    form.setFieldsValue({
+      studentId: leaveLesson.studentId,
+      subject: leaveLesson.subject,
+      date: proposedDate,
+      startTime: toTime(leaveLesson.startTime),
+      endTime: toTime(leaveLesson.endTime),
+      location: leaveLesson.location,
+      notes: `補 ${dayjs(leaveLesson.date).format('YYYY/MM/DD')} 請假課程`,
+      fee: 0,
+      paymentStatus: 'paid',
+      isRecurring: false,
+      skipConflictDates: false,
+    })
+    setLessonDrawerOpen(true)
+  }, [form, selectedDate])
+
+  // 接收來自外部頁面（如 Dashboard）傳遞進來的補課請求
+  useEffect(() => {
+    const stateObj = location.state as { makeupLessonId?: string } | null
+    const targetId = stateObj?.makeupLessonId
+    if (targetId && makeupHandledRef.current !== targetId) {
+      makeupHandledRef.current = targetId
+      const leaveLesson = lessons.find((l) => l.id === targetId)
+      if (leaveLesson) {
+        window.history.replaceState({}, document.title)
+        const timer = setTimeout(() => {
+          openMakeupLesson(leaveLesson)
+        }, 0)
+        return () => clearTimeout(timer)
+      }
+    }
+  }, [location.state, lessons, openMakeupLesson])
+
   const submitLesson = (values: LessonFormValues) => {
     const student = students.find((item) => item.id === values.studentId)
     if (!student) return
     const fallbackFee = student.defaultFee ?? settings.defaultFee ?? 1200
     const fee = values.fee !== undefined ? values.fee : fallbackFee
+
+    // 補課儲存邏輯
+    if (makeupForLesson) {
+      addLesson({
+        studentId: student.id,
+        studentName: student.name,
+        subject: values.subject,
+        date: values.date.format('YYYY-MM-DD'),
+        startTime: values.startTime.format('HH:mm'),
+        endTime: values.endTime.format('HH:mm'),
+        location: values.location,
+        notes: values.notes,
+        fee,
+        paymentStatus: values.paymentStatus ?? 'paid',
+        status: 'scheduled' as LessonStatus,
+        isMakeup: true,
+        makeupForLessonId: makeupForLesson.id,
+      })
+      setMakeupForLesson(null)
+      setLessonDrawerOpen(false)
+      void message.success(`已為【${student.name}】安排補課`)
+      return
+    }
 
     // 週期性排課邏輯
     if (!editingLesson && values.isRecurring) {
@@ -290,6 +359,9 @@ export default function CalendarPage() {
   const renderLesson = (lesson: Lesson) => {
     const conflicts = findConflicts(lesson.date, lesson.startTime, lesson.endTime, lessons, lesson.id)
     const hasConflict = conflicts.length > 0
+    const rescheduledTarget = lesson.rescheduledLessonId && lesson.rescheduledLessonId !== 'waived'
+      ? lessons.find((l) => l.id === lesson.rescheduledLessonId)
+      : null
 
     return (
       <List.Item key={lesson.id}>
@@ -302,6 +374,9 @@ export default function CalendarPage() {
             <Space size={6} wrap align="center">
               <span className="lesson-name">{lesson.studentName}</span>
               <Tag color="blue">{lesson.subject}</Tag>
+              {lesson.isMakeup ? (
+                <Tag color="cyan">補課</Tag>
+              ) : null}
               {lesson.recurringGroupId ? (
                 <Tag color="purple" icon={<SyncOutlined />}>循環</Tag>
               ) : null}
@@ -309,6 +384,15 @@ export default function CalendarPage() {
                 <Tag color="error" icon={<AlertOutlined />} title={`與 ${conflicts.map((c) => c.studentName).join('、')} 衝堂`}>
                   衝堂
                 </Tag>
+              ) : null}
+              {lesson.status === 'leave' ? (
+                lesson.rescheduledLessonId === 'waived' ? (
+                  <Tag>已免補課</Tag>
+                ) : rescheduledTarget ? (
+                  <Tag color="green">已排補課 {dayjs(rescheduledTarget.date).format('MM/DD')}</Tag>
+                ) : (
+                  <Tag color="orange">待排補課</Tag>
+                )
               ) : null}
               {lesson.fee !== undefined ? (
                 <Tag
@@ -335,6 +419,26 @@ export default function CalendarPage() {
               ]}
               onChange={(status: LessonStatus) => updateLessonStatus(lesson.id, status)}
             />
+            {lesson.status === 'leave' && !lesson.rescheduledLessonId && (
+              <Button type="primary" ghost size="small" onClick={() => openMakeupLesson(lesson)}>
+                安排補課
+              </Button>
+            )}
+            {lesson.status === 'leave' && !lesson.rescheduledLessonId && (
+              <Popconfirm
+                title="確認此堂請假免補課？"
+                okText="確認免補"
+                cancelText="取消"
+                onConfirm={() => {
+                  markLeaveWaived(lesson.id)
+                  void message.success('已標記為免補課')
+                }}
+              >
+                <Button type="text" size="small" style={{ color: '#8c8c8c' }}>
+                  免補
+                </Button>
+              </Popconfirm>
+            )}
             <Button type="link" size="small" onClick={() => openEditLesson(lesson)}>編輯</Button>
             {lesson.recurringGroupId ? (
               <Button danger type="text" size="small" onClick={() => setRecurringDeleteLesson(lesson)}>刪除</Button>
@@ -412,13 +516,25 @@ export default function CalendarPage() {
       </Space>
     </Drawer>
     <Drawer
-      title={editingLesson ? '編輯排課' : '新增排課'}
+      title={makeupForLesson ? `安排補課 · ${makeupForLesson.studentName}` : editingLesson ? '編輯排課' : '新增排課'}
       placement="right"
       width={440}
       open={lessonDrawerOpen}
-      onClose={() => setLessonDrawerOpen(false)}
-      extra={<Button type="primary" onClick={() => form.submit()}>{editingLesson ? '儲存' : '新增'}</Button>}
+      onClose={() => {
+        setLessonDrawerOpen(false)
+        setMakeupForLesson(null)
+      }}
+      extra={<Button type="primary" onClick={() => form.submit()}>{makeupForLesson ? '確認補課' : editingLesson ? '儲存' : '新增'}</Button>}
     >
+      {makeupForLesson && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={`此為補課排程（原請假課：${dayjs(makeupForLesson.date).format('YYYY/MM/DD')}）`}
+          description="系統已自動帶入學員與科目，補課預設學費已標記為已結清。"
+        />
+      )}
       <Form
         form={form}
         layout="vertical"
@@ -428,7 +544,11 @@ export default function CalendarPage() {
         initialValues={{ isRecurring: false, recurringFrequency: 'weekly', recurringCount: 4, skipConflictDates: false }}
       >
         <Form.Item name="studentId" label="學員" rules={[{ required: true, message: '請選擇學員' }]}>
-          <Select placeholder="選擇學員" options={students.map((student) => ({ value: student.id, label: `${student.name}・${student.subjects.join('、')}` }))} />
+          <Select
+            disabled={Boolean(makeupForLesson)}
+            placeholder="選擇學員"
+            options={students.map((student) => ({ value: student.id, label: `${student.name}・${student.subjects.join('、')}` }))}
+          />
         </Form.Item>
         <Form.Item name="subject" label="課程科目" rules={[{ required: true, message: '請選擇課程種類' }]}>
           <Select placeholder="請選擇課程種類" options={lessonSubjectOptions} />
@@ -480,8 +600,8 @@ export default function CalendarPage() {
           />
         )}
 
-        {/* 週期性重複排課選項（僅新增排課時可用） */}
-        {!editingLesson && (
+        {/* 週期性重複排課選項（僅新增排課時可用，補課不適用週期） */}
+        {!editingLesson && !makeupForLesson && (
           <Card size="small" style={{ marginBottom: 16, background: 'rgba(59, 130, 246, 0.04)', borderColor: 'rgba(59, 130, 246, 0.2)' }}>
             <Flex justify="space-between" align="center" style={{ marginBottom: formIsRecurring ? 12 : 0 }}>
               <Space>

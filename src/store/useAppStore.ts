@@ -14,6 +14,7 @@ type AppState = BackupPayload & {
   deleteLesson: (id: string) => void
   deleteRecurringLessons: (recurringGroupId: string, fromDate?: string) => void
   updateLessonStatus: (id: string, status: LessonStatus) => void
+  markLeaveWaived: (lessonId: string) => void
   updateLessonPaymentStatus: (id: string, status: PaymentStatus) => void
   batchUpdateLessonPaymentStatus: (ids: string[], status: PaymentStatus) => void
   updateSettings: (data: Partial<AppSettings>) => void
@@ -68,7 +69,7 @@ export const createSeedData = (): BackupPayload => {
       lesson('lesson-today-2', students[1], 0, '14:00', '15:00', 'scheduled', 'unpaid'),
       lesson('lesson-today-3', students[2], 0, '18:30', '19:30', 'completed', 'paid'),
       lesson('lesson-yesterday', students[3], -1, '16:00', '17:00', 'scheduled', 'unpaid'),
-      lesson('lesson-before-yesterday', students[0], -2, '19:00', '20:00', 'scheduled', 'paid'),
+      lesson('lesson-before-yesterday', students[0], -2, '19:00', '20:00', 'leave', 'paid'),
       lesson('lesson-tomorrow-1', students[2], 1, '11:00', '12:00', 'scheduled', 'unpaid'),
       lesson('lesson-tomorrow-2', students[3], 1, '15:30', '16:30', 'scheduled', 'unpaid'),
     ],
@@ -90,7 +91,20 @@ export const useAppStore = create<AppState>()(persist((set) => ({
   addLesson: (lesson) => set((state) => {
     const student = state.students.find((s) => s.id === lesson.studentId)
     const fee = lesson.fee !== undefined ? lesson.fee : (student?.defaultFee ?? state.settings.defaultFee ?? 1200)
-    return { lessons: [...state.lessons, { ...lesson, fee, paymentStatus: lesson.paymentStatus ?? 'unpaid', id: createId() }] }
+    const newId = createId()
+    const newLesson: Lesson = {
+      ...lesson,
+      fee,
+      paymentStatus: lesson.paymentStatus ?? 'unpaid',
+      id: newId,
+    }
+    const updatedLessons = state.lessons.map((l) => {
+      if (lesson.makeupForLessonId && l.id === lesson.makeupForLessonId) {
+        return { ...l, rescheduledLessonId: newId }
+      }
+      return l
+    })
+    return { lessons: [...updatedLessons, newLesson] }
   }),
   addLessons: (newLessons) => set((state) => {
     const prepared = newLessons.map((lesson) => {
@@ -106,7 +120,22 @@ export const useAppStore = create<AppState>()(persist((set) => ({
     return { lessons: [...state.lessons, ...prepared] }
   }),
   updateLesson: (id, data) => set((state) => ({ lessons: state.lessons.map((lesson) => lesson.id === id ? { ...lesson, ...data } : lesson) })),
-  deleteLesson: (id) => set((state) => ({ lessons: state.lessons.filter((lesson) => lesson.id !== id) })),
+  deleteLesson: (id) => set((state) => {
+    const target = state.lessons.find((l) => l.id === id)
+    return {
+      lessons: state.lessons
+        .filter((l) => l.id !== id)
+        .map((l) => {
+          if (target?.makeupForLessonId && l.id === target.makeupForLessonId) {
+            return { ...l, rescheduledLessonId: undefined }
+          }
+          if (target?.rescheduledLessonId && l.id === target.rescheduledLessonId) {
+            return { ...l, isMakeup: false, makeupForLessonId: undefined }
+          }
+          return l
+        }),
+    }
+  }),
   deleteRecurringLessons: (recurringGroupId, fromDate) => set((state) => ({
     lessons: state.lessons.filter((lesson) => {
       if (lesson.recurringGroupId !== recurringGroupId) return true
@@ -114,7 +143,19 @@ export const useAppStore = create<AppState>()(persist((set) => ({
       return false
     }),
   })),
-  updateLessonStatus: (id, status) => set((state) => ({ lessons: state.lessons.map((lesson) => lesson.id === id ? { ...lesson, status } : lesson) })),
+  updateLessonStatus: (id, status) => set((state) => ({
+    lessons: state.lessons.map((lesson) => {
+      if (lesson.id === id) {
+        // If status changes away from leave, reset rescheduledLessonId
+        const rescheduledLessonId = status === 'leave' ? lesson.rescheduledLessonId : undefined
+        return { ...lesson, status, rescheduledLessonId }
+      }
+      return lesson
+    }),
+  })),
+  markLeaveWaived: (lessonId) => set((state) => ({
+    lessons: state.lessons.map((lesson) => lesson.id === lessonId ? { ...lesson, rescheduledLessonId: 'waived' } : lesson),
+  })),
   updateLessonPaymentStatus: (id, paymentStatus) => set((state) => ({
     lessons: state.lessons.map((lesson) => lesson.id === id ? { ...lesson, paymentStatus, paidAt: paymentStatus === 'paid' ? dayjs().format('YYYY-MM-DD HH:mm') : undefined } : lesson),
   })),

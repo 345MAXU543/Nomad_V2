@@ -16,11 +16,13 @@ export default function DashboardPage() {
   const lessons = useAppStore((state) => state.lessons)
   const updateLessonStatus = useAppStore((state) => state.updateLessonStatus)
   const updateLessonPaymentStatus = useAppStore((state) => state.updateLessonPaymentStatus)
+  const markLeaveWaived = useAppStore((state) => state.markLeaveWaived)
 
   const today = dayjs().format('YYYY-MM-DD')
   const todayLessons = lessons.filter((lesson) => lesson.date === today)
   const upcoming = todayLessons.filter((lesson) => lesson.status === 'scheduled').sort((a, b) => a.startTime.localeCompare(b.startTime))
   const pending = lessons.filter((lesson) => lesson.status === 'scheduled' && lesson.date <= today).sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`))
+  const pendingMakeups = lessons.filter((lesson) => lesson.status === 'leave' && !lesson.rescheduledLessonId).sort((a, b) => b.date.localeCompare(a.date))
 
   const todayActiveLessons = todayLessons.filter((lesson) => lesson.status !== 'leave')
   const todayExpectedIncome = todayActiveLessons.reduce((sum, lesson) => sum + (lesson.fee ?? 0), 0)
@@ -90,6 +92,9 @@ export default function DashboardPage() {
                     <Space size={6} wrap align="center">
                       <span className="lesson-name">{lesson.studentName}</span>
                       <Tag color="blue">{lesson.subject}</Tag>
+                      {lesson.isMakeup ? (
+                        <Tag color="cyan">補課</Tag>
+                      ) : null}
                       {lesson.recurringGroupId ? (
                         <Tag color="purple" icon={<SyncOutlined />}>循環</Tag>
                       ) : null}
@@ -118,6 +123,67 @@ export default function DashboardPage() {
       )}
     </Card>
 
+    {/* 待安排補課追蹤清單 */}
+    {pendingMakeups.length > 0 && (
+      <Card
+        className="surface-card"
+        title={
+          <Space>
+            <span>待安排補課</span>
+            <Badge count={pendingMakeups.length} style={{ backgroundColor: '#f97316' }} />
+          </Space>
+        }
+        style={{ marginBottom: 16 }}
+      >
+        <List
+          className="lesson-list"
+          dataSource={pendingMakeups}
+          renderItem={(lesson) => (
+            <List.Item>
+              <div className="lesson-row">
+                <div className="lesson-time">
+                  {dayjs(lesson.date).format('MM/DD')}<br />
+                  <span style={{ fontSize: 12, color: '#f97316' }}>請假</span>
+                </div>
+                <div className="lesson-main">
+                  <Space size={6} wrap align="center">
+                    <span className="lesson-name">{lesson.studentName}</span>
+                    <Tag color="blue">{lesson.subject}</Tag>
+                    {lesson.fee !== undefined ? (
+                      <Tag color={lesson.paymentStatus === 'paid' ? 'success' : 'warning'}>
+                        {lesson.paymentStatus === 'paid' ? '學費已收' : '學費待收'}
+                      </Tag>
+                    ) : null}
+                  </Space>
+                  <div className="lesson-meta">原課時段：{lesson.startTime} - {lesson.endTime} · {lesson.location}</div>
+                </div>
+                <Space size={6}>
+                  <Button
+                    type="primary"
+                    size="small"
+                    onClick={() => navigate('/calendar', { state: { makeupLessonId: lesson.id } })}
+                  >
+                    安排補課
+                  </Button>
+                  <Button
+                    type="text"
+                    size="small"
+                    style={{ color: '#8c8c8c' }}
+                    onClick={() => {
+                      markLeaveWaived(lesson.id)
+                      void message.success('已標記為免補課')
+                    }}
+                  >
+                    免補
+                  </Button>
+                </Space>
+              </div>
+            </List.Item>
+          )}
+        />
+      </Card>
+    )}
+
     <Card className="surface-card" title="待補登完課">
       {pending.length === 0 ? <Empty description="沒有待補登課程" /> : (
         <List
@@ -135,6 +201,9 @@ export default function DashboardPage() {
                     <Space size={6} wrap align="center">
                       <span className="lesson-name">{lesson.studentName}</span>
                       <Tag>{lesson.subject}</Tag>
+                      {lesson.isMakeup ? (
+                        <Tag color="cyan">補課</Tag>
+                      ) : null}
                       {lesson.recurringGroupId ? (
                         <Tag color="purple" icon={<SyncOutlined />}>循環</Tag>
                       ) : null}
