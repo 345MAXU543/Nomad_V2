@@ -164,7 +164,7 @@ export default function DashboardPage() {
                     size="small"
                     onClick={() => {
                       setPendingMakeupLessonId(lesson.id)
-                      navigate('/calendar')
+                      navigate(`/calendar?makeup=${lesson.id}`)
                     }}
                   >
                     安排補課

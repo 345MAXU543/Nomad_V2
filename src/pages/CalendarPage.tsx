@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
 import {
   Alert,
@@ -35,7 +35,7 @@ import {
   SyncOutlined,
 } from '@ant-design/icons'
 import zhTW from 'antd/locale/zh_TW'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { useAppStore } from '../store/useAppStore'
 import type { Lesson, LessonStatus, PaymentStatus } from '../types'
 import type { DefaultOptionType } from 'antd/es/select'
@@ -61,7 +61,11 @@ const calendarLocale = {
   ...antdLocale.Calendar,
   lang: { ...antdLocale.Calendar?.lang, locale: 'zh-tw', shortWeekDays: ['日', '一', '二', '三', '四', '五', '六'] },
 } as CalendarProps<Dayjs>['locale']
-const toTime = (time: string) => dayjs(`${dayjs().format('YYYY-MM-DD')}T${time}`)
+const toTime = (time?: string) => {
+  if (!time) return dayjs().hour(14).minute(0)
+  const d = dayjs(`${dayjs().format('YYYY-MM-DD')}T${time}`)
+  return d.isValid() ? d : dayjs().hour(14).minute(0)
+}
 
 const isTimeOverlapping = (startA: string, endA: string, startB: string, endB: string): boolean => {
   return startA < endB && endA > startB
@@ -100,6 +104,8 @@ export default function CalendarPage() {
   const pendingMakeupLessonId = useAppStore((state) => state.pendingMakeupLessonId)
   const setPendingMakeupLessonId = useAppStore((state) => state.setPendingMakeupLessonId)
 
+  const [searchParams, setSearchParams] = useSearchParams()
+  const handledMakeupRef = useRef<string | null>(null)
   const [viewMode, setViewMode] = useState<'月檢視' | '列表檢視'>('月檢視')
   const [selectedDate, setSelectedDate] = useState(dayjs())
   const [statusFilter, setStatusFilter] = useState<'all' | LessonStatus>('all')
@@ -168,6 +174,7 @@ export default function CalendarPage() {
   const openNewLesson = () => {
     setEditingLesson(null)
     setMakeupForLesson(null)
+    handledMakeupRef.current = null
     setExcludedDates([])
     const fallbackFee = settings.defaultFee ?? 1200
     form.setFieldsValue({
@@ -191,6 +198,7 @@ export default function CalendarPage() {
   const openEditLesson = (lesson: Lesson) => {
     setEditingLesson(lesson)
     setMakeupForLesson(null)
+    handledMakeupRef.current = null
     setExcludedDates([])
     const student = students.find((item) => item.id === lesson.studentId)
     form.setFieldsValue({
@@ -213,6 +221,7 @@ export default function CalendarPage() {
     setMakeupForLesson(leaveLesson)
     setExcludedDates([])
     const proposedDate = selectedDate.isBefore(dayjs().subtract(1, 'day')) ? dayjs().add(1, 'day') : selectedDate
+    setSelectedDate(proposedDate)
     form.setFieldsValue({
       studentId: leaveLesson.studentId,
       subject: leaveLesson.subject,
@@ -231,23 +240,23 @@ export default function CalendarPage() {
 
   // 接收來自外部頁面（如 Dashboard）傳遞進來的補課請求
   useEffect(() => {
-    const targetId = pendingMakeupLessonId || (location.state as { makeupLessonId?: string } | null)?.makeupLessonId
-    if (targetId) {
-      const leaveLesson = lessons.find((l) => l.id === targetId)
-      if (leaveLesson) {
-        const timer = setTimeout(() => {
-          openMakeupLesson(leaveLesson)
-        }, 0)
+    const makeupId = searchParams.get('makeup') || pendingMakeupLessonId || (location.state as { makeupLessonId?: string } | null)?.makeupLessonId
+    if (!makeupId || handledMakeupRef.current === makeupId) return
+
+    const leaveLesson = lessons.find((l) => l.id === makeupId)
+    if (leaveLesson) {
+      handledMakeupRef.current = makeupId
+      queueMicrotask(() => {
+        openMakeupLesson(leaveLesson)
         if (pendingMakeupLessonId) {
           setPendingMakeupLessonId(null)
         }
-        return () => clearTimeout(timer)
-      }
-      if (pendingMakeupLessonId) {
-        setPendingMakeupLessonId(null)
-      }
+        if (searchParams.get('makeup')) {
+          setSearchParams({}, { replace: true })
+        }
+      })
     }
-  }, [pendingMakeupLessonId, location.state, lessons, openMakeupLesson, setPendingMakeupLessonId])
+  }, [searchParams, pendingMakeupLessonId, location.state, lessons, openMakeupLesson, setSearchParams, setPendingMakeupLessonId])
 
   const submitLesson = (values: LessonFormValues) => {
     const targetStudentId = values.studentId || makeupForLesson?.studentId
@@ -275,6 +284,7 @@ export default function CalendarPage() {
       })
       setMakeupForLesson(null)
       setLessonDrawerOpen(false)
+      handledMakeupRef.current = null
       void message.success(`已為【${student.name}】安排補課`)
       return
     }
@@ -529,6 +539,7 @@ export default function CalendarPage() {
       onClose={() => {
         setLessonDrawerOpen(false)
         setMakeupForLesson(null)
+        handledMakeupRef.current = null
       }}
       extra={<Button type="primary" onClick={() => form.submit()}>{makeupForLesson ? '確認補課' : editingLesson ? '儲存' : '新增'}</Button>}
     >
