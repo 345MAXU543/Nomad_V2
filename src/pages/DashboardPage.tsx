@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import dayjs from 'dayjs'
 import {
   Alert,
@@ -18,6 +18,8 @@ import {
   Space,
   Statistic,
   Tag,
+  Tour,
+  type TourProps,
   Typography,
   message,
 } from 'antd'
@@ -56,6 +58,19 @@ export default function DashboardPage() {
   const delayLessons = useAppStore((state) => state.delayLessons)
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
+  const hasCompletedOnboarding = useAppStore((state) => state.settings.hasCompletedOnboarding ?? false)
+  const completeOnboarding = useAppStore((state) => state.completeOnboarding)
+  const startBlankState = useAppStore((state) => state.startBlankState)
+  const loadDemoState = useAppStore((state) => state.loadDemoState)
+
+  const [showOnboardingModal, setShowOnboardingModal] = useState(!hasCompletedOnboarding)
+  const [tourOpen, setTourOpen] = useState(false)
+
+  const refTourStats = useRef<HTMLDivElement>(null)
+  const refTourUpcoming = useRef<HTMLDivElement>(null)
+  const refTourDelay = useRef<HTMLButtonElement>(null)
+  const refTourNotes = useRef<HTMLDivElement>(null)
+  const refTourCalendar = useRef<HTMLButtonElement>(null)
 
   const [noteModalStudent, setNoteModalStudent] = useState<Student | null>(null)
   const [noteModalText, setNoteModalText] = useState('')
@@ -121,6 +136,34 @@ export default function DashboardPage() {
     })
   }
 
+  const tourSteps: TourProps['steps'] = [
+    {
+      title: '📊 教學營運即時看板',
+      description: '一目了然掌握今日總排課數、待完課進度、預估總收入與待收學費堂數。',
+      target: () => (refTourStats.current as HTMLElement),
+    },
+    {
+      title: '🎵 課堂資訊與快速記帳',
+      description: '顯示時段、學員、才藝科目與地點。點擊學費標籤可在「待收 ➔ 已收 ➔ 包月免收」一鍵循環切換！實體地點更支援一鍵開啟 Google 地圖導航。',
+      target: () => (refTourUpcoming.current as HTMLElement),
+    },
+    {
+      title: '⚡ 拖堂骨牌一鍵順延',
+      description: '學生拖堂或路上塞車？點擊「順延」即可快速推遲時段，並支援「骨牌連動順延今日後續所有課程」，免去手動逐堂重排的痛苦！',
+      target: () => (refTourDelay.current as HTMLElement),
+    },
+    {
+      title: '📖 課前備忘與教學筆記',
+      description: '每位學員皆有專屬 5 行教學備忘筆記，記錄上次練琴進度與課前叮嚀。系統上課前還會發送鬧鐘與手機震動提醒您！',
+      target: () => (refTourNotes.current as HTMLElement),
+    },
+    {
+      title: '📅 多檢視行事曆與通勤規劃',
+      description: '支援日檢視、週時間軸、月檢視與列表檢視。點擊時間軸空白處即可快速排課，或規劃跨區授課的「通勤排程」與 Google Maps 路線！',
+      target: () => (refTourCalendar.current as HTMLElement),
+    },
+  ]
+
   // 計算骨牌順延預覽清單
   const cascadePreviewList = useMemo(() => {
     if (!delayModalLesson) return []
@@ -180,7 +223,7 @@ export default function DashboardPage() {
         />
       )}
 
-      <Row gutter={[12, 12]} style={{ marginBottom: 20 }}>
+      <div ref={refTourStats}><Row gutter={[12, 12]} style={{ marginBottom: 20 }}>
         <Col xs={12} sm={6}>
           <Card className="surface-card dashboard-stat">
             <Statistic title="今日總堂數" value={todayActiveLessons.length} suffix="堂" />
@@ -202,6 +245,7 @@ export default function DashboardPage() {
           </Card>
         </Col>
       </Row>
+      </div>
 
       <Card
         className="surface-card"
@@ -213,7 +257,7 @@ export default function DashboardPage() {
           <List
             className="lesson-list"
             dataSource={upcoming}
-            renderItem={(lesson) => {
+            renderItem={(lesson, index) => {
               const hasConflict = checkConflict(lesson)
               const student = students.find((s) => s.id === lesson.studentId)
               const isPhysical = lesson.location && !lesson.location.includes('線上')
@@ -264,6 +308,7 @@ export default function DashboardPage() {
                       </div>
                       <Space size={8} align="center">
                         <Button
+                          ref={index === 0 ? refTourDelay : undefined}
                           size="small"
                           icon={<FieldTimeOutlined />}
                           onClick={() => openDelayModal(lesson)}
@@ -275,7 +320,7 @@ export default function DashboardPage() {
                       </Space>
                     </div>
                     {student?.teachingNotes ? (
-                      <div className="dashboard-teaching-note">
+                      <div ref={index === 0 ? refTourNotes : undefined} className="dashboard-teaching-note">
                         <BookOutlined style={{ color: '#d97706', marginTop: 3, flexShrink: 0 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <Flex justify="space-between" align="center" style={{ marginBottom: 2 }}>
@@ -653,6 +698,142 @@ export default function DashboardPage() {
           placeholder="例如：上次練到第 40 首，今天先驗收右手節奏；記得提醒家長下週請假..."
         />
       </Modal>
+
+      {/* 新用戶迎賓引導 Modal */}
+      <Modal
+        open={showOnboardingModal}
+        onCancel={() => {
+          setShowOnboardingModal(false)
+          completeOnboarding()
+        }}
+        footer={null}
+        width={560}
+        centered
+        maskClosable={false}
+      >
+        <div style={{ textAlign: 'center', padding: '16px 8px 8px' }}>
+          <div style={{ fontSize: 44, marginBottom: 8 }}>🎵</div>
+          <Typography.Title level={3} style={{ marginBottom: 4 }}>
+            歡迎使用 Nomad 個人音樂教學管理中心
+          </Typography.Title>
+          <Typography.Paragraph type="secondary" style={{ fontSize: 14, marginBottom: 20 }}>
+            專為獨立音樂老師量身打造，告別混亂行事曆與試算表。<br />
+            整合排課、拖堂骨牌順延、跨區通勤導航、課前叮嚀與學費管理。
+          </Typography.Paragraph>
+
+          <Row gutter={[12, 12]} style={{ marginBottom: 24, textAlign: 'left' }}>
+            <Col span={12}>
+              <Card size="small" style={{ height: '100%', background: 'rgba(59, 130, 246, 0.04)', borderColor: 'rgba(59, 130, 246, 0.2)' }}>
+                <Typography.Text strong style={{ color: '#2563eb' }}>📅 多維度時間軸排課</Typography.Text>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                  日檢視、週時間軸、月檢視，點擊空白即刻預約排課或通勤。
+                </div>
+              </Card>
+            </Col>
+            <Col span={12}>
+              <Card size="small" style={{ height: '100%', background: 'rgba(245, 158, 11, 0.04)', borderColor: 'rgba(245, 158, 11, 0.2)' }}>
+                <Typography.Text strong style={{ color: '#d97706' }}>⚡ 拖堂骨牌一鍵順延</Typography.Text>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                  遇塞車拖堂時，一鍵連動自動推遲今日後續所有課程時段。
+                </div>
+              </Card>
+            </Col>
+            <Col span={12}>
+              <Card size="small" style={{ height: '100%', background: 'rgba(249, 115, 22, 0.04)', borderColor: 'rgba(249, 115, 22, 0.2)' }}>
+                <Typography.Text strong style={{ color: '#ea580c' }}>🚗 跨點通勤與地圖導航</Typography.Text>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                  排定授課移動交通時間，一鍵直連 Google Maps 規劃路線。
+                </div>
+              </Card>
+            </Col>
+            <Col span={12}>
+              <Card size="small" style={{ height: '100%', background: 'rgba(16, 185, 129, 0.04)', borderColor: 'rgba(16, 185, 129, 0.2)' }}>
+                <Typography.Text strong style={{ color: '#059669' }}>💰 包月與學費狀態追蹤</Typography.Text>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                  支援單堂收費與包月預收，點擊標籤流暢切換收費狀態。
+                </div>
+              </Card>
+            </Col>
+          </Row>
+
+          <Typography.Text strong style={{ display: 'block', marginBottom: 12, fontSize: 14 }}>
+            請選擇您偏好的啟程方式：
+          </Typography.Text>
+
+          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+            <Card
+              hoverable
+              style={{ textAlign: 'left', borderColor: '#3b82f6', background: 'rgba(59, 130, 246, 0.03)' }}
+              onClick={() => {
+                loadDemoState()
+                setShowOnboardingModal(false)
+                setTourOpen(true)
+                void message.info('已為您載入示範資料！即刻啟動 30 秒功能導覽')
+              }}
+            >
+              <Flex justify="space-between" align="center">
+                <div>
+                  <Typography.Text strong style={{ fontSize: 15, color: '#1d4ed8' }}>
+                    ✨ 載入示範資料並開始導覽（推薦新手）
+                  </Typography.Text>
+                  <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
+                    系統帶入 4 位示範學生與範例課堂，並啟動步進式導覽（適合先摸索功能的老師）。
+                  </div>
+                </div>
+                <Button type="primary">開始導覽</Button>
+              </Flex>
+            </Card>
+
+            <Card
+              hoverable
+              style={{ textAlign: 'left', borderColor: '#10b981', background: 'rgba(16, 185, 129, 0.03)' }}
+              onClick={() => {
+                startBlankState()
+                setShowOnboardingModal(false)
+                navigate('/students')
+                void message.success('已為您建立全新空白帳本！請先新增您的第一位學員')
+              }}
+            >
+              <Flex justify="space-between" align="center">
+                <div>
+                  <Typography.Text strong style={{ fontSize: 15, color: '#047857' }}>
+                    🚀 立即從全新空白帳本開始
+                  </Typography.Text>
+                  <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
+                    不載入任何假資料，工作台 100% 乾淨，直接前往建檔您自己的學員。
+                  </div>
+                </div>
+                <Button style={{ borderColor: '#10b981', color: '#047857' }}>空白建檔</Button>
+              </Flex>
+            </Card>
+          </Space>
+
+          <div style={{ marginTop: 16 }}>
+            <Button
+              type="text"
+              size="small"
+              style={{ color: '#8c8c8c' }}
+              onClick={() => {
+                setShowOnboardingModal(false)
+                completeOnboarding()
+              }}
+            >
+              略過新手引導，直接進入主頁
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 步進式互動教學 Tour */}
+      <Tour
+        open={tourOpen}
+        onClose={() => {
+          setTourOpen(false)
+          completeOnboarding()
+          void message.success('新手導覽完成，開始享受高效從容的教學時光！')
+        }}
+        steps={tourSteps}
+      />
     </>
   )
 }

@@ -31,6 +31,10 @@ type AppState = BackupPayload & {
   toggleDarkMode: () => void
   importData: (payload: BackupPayload) => void
   resetToDefault: () => void
+  completeOnboarding: () => void
+  resetOnboarding: () => void
+  startBlankState: () => void
+  loadDemoState: () => void
 }
 
 const createId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
@@ -43,6 +47,7 @@ const normalizeSettings = (settings: Partial<AppSettings>): AppSettings => ({
   courseTypes: settings.courseTypes?.length ? settings.courseTypes : defaultCourseTypes,
   enableNotifications: settings.enableNotifications ?? false,
   notificationLeadMinutes: settings.notificationLeadMinutes ?? 15,
+  hasCompletedOnboarding: settings.hasCompletedOnboarding ?? false,
 })
 
 type StoredStudent = Omit<Student, 'subjects'> & { subjects?: string[] }
@@ -265,6 +270,23 @@ export const useAppStore = create<AppState>()(persist((set) => ({
     settings: normalizeSettings(payload.settings),
   }),
   resetToDefault: () => set(createSeedData()),
+  completeOnboarding: () => set((state) => ({ settings: { ...state.settings, hasCompletedOnboarding: true } })),
+  resetOnboarding: () => set((state) => ({ settings: { ...state.settings, hasCompletedOnboarding: false } })),
+  startBlankState: () => set((state) => ({
+    students: [],
+    lessons: [],
+    commutes: [],
+    settings: { ...state.settings, hasCompletedOnboarding: true },
+  })),
+  loadDemoState: () => {
+    const seed = createSeedData()
+    set((state) => ({
+      students: seed.students,
+      lessons: seed.lessons,
+      commutes: seed.commutes,
+      settings: { ...state.settings, hasCompletedOnboarding: true },
+    }))
+  },
 }), {
   name: 'nomad-v2-storage',
   storage: createJSONStorage(() => localStorage),

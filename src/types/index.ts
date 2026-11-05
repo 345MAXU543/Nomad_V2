@@ -63,6 +63,7 @@ export interface AppSettings {
   courseTypes: string[]
   enableNotifications?: boolean
   notificationLeadMinutes?: number
+  hasCompletedOnboarding?: boolean
 }
 
 export interface BackupPayload {
