@@ -61,4 +61,14 @@
 .install-banner-message { flex: 1; min-width: 0; }
 .is-dark .install-banner { background: #141414; border-bottom-color: rgba(255, 255, 255, .12); }
 .app-shell:has(.install-banner) .app-header { top: 52px; }
-@media (max-width: 576px) { .app-content { padding: 16px 12px 32px; } .page-heading { margin-bottom: 16px; } .calendar-toolbar .ant-segmented { max-width: calc(100vw - 158px); overflow: hidden; } .lesson-time { width: 92px; } .lesson-row { align-items: flex-start; flex-wrap: wrap; } .lesson-main { flex: 1 1 150px; } .lesson-actions { width: 100%; justify-content: flex-end; margin-top: 4px; } .stats-heading { align-items: flex-start; flex-direction: column; } .install-banner { padding-inline: 12px; } .install-banner-message { font-size: 14px; } .course-type-actions .ant-btn { padding-inline: 4px; } }
+.dashboard-teaching-note { margin-top: 8px; margin-left: 120px; padding: 8px 12px; border-radius: 8px; background: rgba(234, 179, 8, .08); border: 1px solid rgba(234, 179, 8, .25); display: flex; align-items: flex-start; gap: 8px; }
+.is-dark .dashboard-teaching-note { background: rgba(234, 179, 8, .12); border-color: rgba(234, 179, 8, .35); }
+.dashboard-teaching-note-content { font-size: 13px; color: #374151; white-space: pre-line; line-height: 1.5; }
+.is-dark .dashboard-teaching-note-content { color: #e2e8f0; }
+.dashboard-add-note-link { margin-top: 4px; margin-left: 120px; }
+.student-notes-preview { margin-top: 4px; font-size: 13px; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 500px; }
+.is-dark .student-notes-preview { color: #94a3b8; }
+.student-card-clickable { cursor: pointer; border-radius: 8px; padding: 8px; transition: background .15s ease; }
+.student-card-clickable:hover { background: rgba(59, 130, 246, .05); }
+.is-dark .student-card-clickable:hover { background: rgba(255, 255, 255, .04); }
+@media (max-width: 576px) { .app-content { padding: 16px 12px 32px; } .page-heading { margin-bottom: 16px; } .calendar-toolbar .ant-segmented { max-width: calc(100vw - 158px); overflow: hidden; } .lesson-time { width: 92px; } .lesson-row { align-items: flex-start; flex-wrap: wrap; } .lesson-main { flex: 1 1 150px; } .lesson-actions { width: 100%; justify-content: flex-end; margin-top: 4px; } .stats-heading { align-items: flex-start; flex-direction: column; } .install-banner { padding-inline: 12px; } .install-banner-message { font-size: 14px; } .course-type-actions .ant-btn { padding-inline: 4px; } .dashboard-teaching-note, .dashboard-add-note-link { margin-left: 0; } }

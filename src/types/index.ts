@@ -14,6 +14,7 @@ export interface Student {
   phone: string
   active: boolean
   notes?: string
+  teachingNotes?: string
   avatarColor?: string
   gender?: '女' | '男'
   age?: number
@@ -34,6 +35,7 @@ export interface Lesson {
   location: string
   status: LessonStatus
   notes?: string
+  teachingNotes?: string
   fee?: number
   paymentStatus?: PaymentStatus
   paidAt?: string

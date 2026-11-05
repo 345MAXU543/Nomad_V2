@@ -8,6 +8,7 @@ type AppState = BackupPayload & {
   setPendingMakeupLessonId: (id: string | null) => void
   addStudent: (student: Omit<Student, 'id'>) => void
   updateStudent: (id: string, data: Partial<Student>) => void
+  updateStudentTeachingNotes: (studentId: string, notes: string) => void
   deleteStudent: (id: string) => void
   toggleStudentActive: (id: string) => void
   addLesson: (lesson: Omit<Lesson, 'id'>) => void
@@ -50,14 +51,15 @@ const normalizeStudent = (student: StoredStudent): Student => {
     subject: student.subject ?? subjects[0],
     defaultFee: student.defaultFee !== undefined ? student.defaultFee : 1200,
     billingCycle: student.billingCycle ?? 'monthly',
+    teachingNotes: student.teachingNotes !== undefined ? student.teachingNotes : (student.notes ?? ''),
   }
 }
 
 export const createSeedData = (): BackupPayload => {
   const students: Student[] = [
-    { id: 'student-lin', name: '林小安', subjects: ['鋼琴', '編曲'], locationType: '工作室', defaultLocation: '教室 A', phone: '0912-345-678', active: true, avatarColor: '#7c3aed', gender: '女', defaultFee: 1200, billingCycle: 'monthly' },
-    { id: 'student-chen', name: '陳宇恩', subjects: ['吉他', '小提琴'], locationType: '到府', defaultLocation: '到府授課・中山區', phone: '0922-345-678', active: true, avatarColor: '#0f766e', gender: '男', defaultFee: 1400, billingCycle: 'perLesson' },
-    { id: 'student-huang', name: '黃以樂', subjects: ['鋼琴'], locationType: '工作室', defaultLocation: '教室 B', phone: '0932-345-678', active: true, avatarColor: '#2563eb', gender: '女', defaultFee: 1000, billingCycle: 'monthly' },
+    { id: 'student-lin', name: '林小安', subjects: ['鋼琴', '編曲'], locationType: '工作室', defaultLocation: '教室 A', phone: '0912-345-678', active: true, avatarColor: '#7c3aed', gender: '女', defaultFee: 1200, billingCycle: 'monthly', teachingNotes: '上次進度：小奏鳴曲 Op.36 No.1 第一樂章練習完畢。\n本次重點：右手連續十六音符觸鍵乾淨度，強弱踏板配合。\n課前叮嚀：提醒家長下週需帶新琴譜，並討論 12 月檢定考時間。' },
+    { id: 'student-chen', name: '陳宇恩', subjects: ['吉他', '小提琴'], locationType: '到府', defaultLocation: '到府授課・中山區', phone: '0922-345-678', active: true, avatarColor: '#0f766e', gender: '男', defaultFee: 1400, billingCycle: 'perLesson', teachingNotes: '進度：民謠吉他刷弦切音技巧演練。\n課前叮嚀：提醒帶節拍器與調音器。\n學費：本月學費已結清。' },
+    { id: 'student-huang', name: '黃以樂', subjects: ['鋼琴'], locationType: '工作室', defaultLocation: '教室 B', phone: '0932-345-678', active: true, avatarColor: '#2563eb', gender: '女', defaultFee: 1000, billingCycle: 'monthly', teachingNotes: '進度：拜爾第 65 首驗收。\n重點：左手伴奏音量要收，右手旋律歌唱性表現。' },
     { id: 'student-wu', name: '吳子謙', subjects: ['吉他'], locationType: '線上', defaultLocation: '線上課程', phone: '0942-345-678', active: true, avatarColor: '#db2777', gender: '男', defaultFee: 900, billingCycle: 'perLesson' },
   ]
   const today = dayjs()
@@ -90,6 +92,9 @@ export const useAppStore = create<AppState>()(persist((set) => ({
     const today = dayjs().format('YYYY-MM-DD')
     return { students: updated, lessons: changed ? state.lessons.map((lesson) => lesson.studentId === id && lesson.status === 'scheduled' && lesson.date > today ? { ...lesson, studentName: changed.name, subject: changed.subjects.includes(lesson.subject) ? lesson.subject : changed.subjects[0] } : lesson) : state.lessons }
   }),
+  updateStudentTeachingNotes: (studentId, notes) => set((state) => ({
+    students: state.students.map((s) => s.id === studentId ? { ...s, teachingNotes: notes } : s),
+  })),
   deleteStudent: (id) => set((state) => ({ students: state.students.filter((student) => student.id !== id), lessons: state.lessons.filter((lesson) => lesson.studentId !== id) })),
   toggleStudentActive: (id) => set((state) => ({ students: state.students.map((student) => student.id === id ? { ...student, active: !student.active } : student) })),
   addLesson: (lesson) => set((state) => {

@@ -1,9 +1,10 @@
+import { useState } from 'react'
 import dayjs from 'dayjs'
-import { Badge, Button, Card, Col, Empty, List, Row, Space, Statistic, Tag, Typography, message } from 'antd'
-import { AlertOutlined, DollarOutlined, EnvironmentOutlined, RightOutlined, SyncOutlined } from '@ant-design/icons'
+import { Badge, Button, Card, Col, Empty, Flex, Input, List, Modal, Popconfirm, Row, Space, Statistic, Tag, Typography, message } from 'antd'
+import { AlertOutlined, BookOutlined, DollarOutlined, EditOutlined, EnvironmentOutlined, RightOutlined, SyncOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../store/useAppStore'
-import type { Lesson, PaymentStatus } from '../types'
+import type { Lesson, PaymentStatus, Student } from '../types'
 
 const statusText = { scheduled: '待上課', completed: '已完課', leave: '請假' } as const
 
@@ -14,10 +15,18 @@ const isTimeOverlapping = (startA: string, endA: string, startB: string, endB: s
 export default function DashboardPage() {
   const navigate = useNavigate()
   const lessons = useAppStore((state) => state.lessons)
+  const students = useAppStore((state) => state.students)
+  const updateStudentTeachingNotes = useAppStore((state) => state.updateStudentTeachingNotes)
   const updateLessonStatus = useAppStore((state) => state.updateLessonStatus)
   const updateLessonPaymentStatus = useAppStore((state) => state.updateLessonPaymentStatus)
   const markLeaveWaived = useAppStore((state) => state.markLeaveWaived)
   const setPendingMakeupLessonId = useAppStore((state) => state.setPendingMakeupLessonId)
+  const [noteModalStudent, setNoteModalStudent] = useState<Student | null>(null)
+  const [noteModalText, setNoteModalText] = useState('')
+  const openNoteModal = (student: Student) => {
+    setNoteModalStudent(student)
+    setNoteModalText(student.teachingNotes ?? '')
+  }
 
   const today = dayjs().format('YYYY-MM-DD')
   const todayLessons = lessons.filter((lesson) => lesson.date === today)
@@ -85,37 +94,95 @@ export default function DashboardPage() {
           dataSource={upcoming}
           renderItem={(lesson) => {
             const hasConflict = checkConflict(lesson)
+            const student = students.find((s) => s.id === lesson.studentId)
             return (
               <List.Item>
-                <div className="lesson-row">
-                  <div className="lesson-time">{lesson.startTime} - {lesson.endTime}</div>
-                  <div className="lesson-main">
-                    <Space size={6} wrap align="center">
-                      <span className="lesson-name">{lesson.studentName}</span>
-                      <Tag color="blue">{lesson.subject}</Tag>
-                      {lesson.isMakeup ? (
-                        <Tag color="cyan">補課</Tag>
-                      ) : null}
-                      {lesson.recurringGroupId ? (
-                        <Tag color="purple" icon={<SyncOutlined />}>循環</Tag>
-                      ) : null}
-                      {hasConflict ? (
-                        <Tag color="error" icon={<AlertOutlined />}>衝堂</Tag>
-                      ) : null}
-                      {lesson.fee !== undefined ? (
-                        <Tag
-                          color={lesson.paymentStatus === 'paid' ? 'success' : lesson.paymentStatus === 'waived' ? 'default' : 'warning'}
-                          style={{ cursor: 'pointer', userSelect: 'none' }}
-                          title="點擊切換 待收 / 已收"
-                          onClick={() => togglePayment(lesson)}
-                        >
-                          <DollarOutlined /> NT$ {lesson.fee.toLocaleString()} · {lesson.paymentStatus === 'paid' ? '已收' : lesson.paymentStatus === 'waived' ? '免收' : '待收'}
-                        </Tag>
-                      ) : null}
-                    </Space>
-                    <div className="lesson-meta"><EnvironmentOutlined /> {lesson.location}</div>
+                <div style={{ width: '100%' }}>
+                  <div className="lesson-row">
+                    <div className="lesson-time">{lesson.startTime} - {lesson.endTime}</div>
+                    <div className="lesson-main">
+                      <Space size={6} wrap align="center">
+                        <span className="lesson-name">{lesson.studentName}</span>
+                        <Tag color="blue">{lesson.subject}</Tag>
+                        {lesson.isMakeup ? (
+                          <Tag color="cyan">補課</Tag>
+                        ) : null}
+                        {lesson.recurringGroupId ? (
+                          <Tag color="purple" icon={<SyncOutlined />}>循環</Tag>
+                        ) : null}
+                        {hasConflict ? (
+                          <Tag color="error" icon={<AlertOutlined />}>衝堂</Tag>
+                        ) : null}
+                        {lesson.fee !== undefined ? (
+                          <Tag
+                            color={lesson.paymentStatus === 'paid' ? 'success' : lesson.paymentStatus === 'waived' ? 'default' : 'warning'}
+                            style={{ cursor: 'pointer', userSelect: 'none' }}
+                            title="點擊切換 待收 / 已收"
+                            onClick={() => togglePayment(lesson)}
+                          >
+                            <DollarOutlined /> NT$ {lesson.fee.toLocaleString()} · {lesson.paymentStatus === 'paid' ? '已收' : lesson.paymentStatus === 'waived' ? '免收' : '待收'}
+                          </Tag>
+                        ) : null}
+                      </Space>
+                      <div className="lesson-meta"><EnvironmentOutlined /> {lesson.location}</div>
+                    </div>
+                    <Badge status="processing" text={statusText[lesson.status]} />
                   </div>
-                  <Badge status="processing" text={statusText[lesson.status]} />
+                  {student?.teachingNotes ? (
+                    <div className="dashboard-teaching-note">
+                      <BookOutlined style={{ color: '#d97706', marginTop: 3, flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <Flex justify="space-between" align="center" style={{ marginBottom: 2 }}>
+                          <Typography.Text strong style={{ fontSize: 13, color: '#b45309' }}>
+                            課前提醒 / 教學筆記
+                          </Typography.Text>
+                          <Space size={8}>
+                            <Button
+                              type="link"
+                              size="small"
+                              style={{ padding: 0, height: 'auto', fontSize: 12 }}
+                              onClick={() => openNoteModal(student)}
+                            >
+                              編輯筆記
+                            </Button>
+                            <Popconfirm
+                              title="確定清空此學員的教學筆記？"
+                              okText="全部清除"
+                              cancelText="取消"
+                              onConfirm={() => {
+                                updateStudentTeachingNotes(student.id, '')
+                                void message.success(`已清空【${student.name}】的教學筆記`)
+                              }}
+                            >
+                              <Button
+                                type="link"
+                                danger
+                                size="small"
+                                style={{ padding: 0, height: 'auto', fontSize: 12 }}
+                              >
+                                全部清除
+                              </Button>
+                            </Popconfirm>
+                          </Space>
+                        </Flex>
+                        <div className="dashboard-teaching-note-content">
+                          {student.teachingNotes}
+                        </div>
+                      </div>
+                    </div>
+                  ) : student ? (
+                    <div className="dashboard-add-note-link">
+                      <Button
+                        type="link"
+                        size="small"
+                        style={{ padding: 0, height: 'auto', fontSize: 12, color: '#8c8c8c' }}
+                        icon={<EditOutlined />}
+                        onClick={() => openNoteModal(student)}
+                      >
+                        新增課前備忘筆記
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
               </List.Item>
             )
@@ -195,42 +262,88 @@ export default function DashboardPage() {
           dataSource={pending}
           renderItem={(lesson) => {
             const hasConflict = checkConflict(lesson)
+            const student = students.find((s) => s.id === lesson.studentId)
             return (
               <List.Item>
-                <div className="lesson-row">
-                  <div className="lesson-time">
-                    {dayjs(lesson.date).format('MM/DD')}<br />{lesson.startTime}
-                  </div>
-                  <div className="lesson-main">
-                    <Space size={6} wrap align="center">
-                      <span className="lesson-name">{lesson.studentName}</span>
-                      <Tag>{lesson.subject}</Tag>
-                      {lesson.isMakeup ? (
-                        <Tag color="cyan">補課</Tag>
-                      ) : null}
-                      {lesson.recurringGroupId ? (
-                        <Tag color="purple" icon={<SyncOutlined />}>循環</Tag>
-                      ) : null}
-                      {hasConflict ? (
-                        <Tag color="error" icon={<AlertOutlined />}>衝堂</Tag>
-                      ) : null}
-                      {lesson.fee !== undefined ? (
-                        <Tag
-                          color={lesson.paymentStatus === 'paid' ? 'success' : lesson.paymentStatus === 'waived' ? 'default' : 'warning'}
-                          style={{ cursor: 'pointer', userSelect: 'none' }}
-                          title="點擊切換 待收 / 已收"
-                          onClick={() => togglePayment(lesson)}
-                        >
-                          <DollarOutlined /> NT$ {lesson.fee.toLocaleString()} · {lesson.paymentStatus === 'paid' ? '已收' : lesson.paymentStatus === 'waived' ? '免收' : '待收'}
-                        </Tag>
-                      ) : null}
+                <div style={{ width: '100%' }}>
+                  <div className="lesson-row">
+                    <div className="lesson-time">
+                      {dayjs(lesson.date).format('MM/DD')}<br />{lesson.startTime}
+                    </div>
+                    <div className="lesson-main">
+                      <Space size={6} wrap align="center">
+                        <span className="lesson-name">{lesson.studentName}</span>
+                        <Tag>{lesson.subject}</Tag>
+                        {lesson.isMakeup ? (
+                          <Tag color="cyan">補課</Tag>
+                        ) : null}
+                        {lesson.recurringGroupId ? (
+                          <Tag color="purple" icon={<SyncOutlined />}>循環</Tag>
+                        ) : null}
+                        {hasConflict ? (
+                          <Tag color="error" icon={<AlertOutlined />}>衝堂</Tag>
+                        ) : null}
+                        {lesson.fee !== undefined ? (
+                          <Tag
+                            color={lesson.paymentStatus === 'paid' ? 'success' : lesson.paymentStatus === 'waived' ? 'default' : 'warning'}
+                            style={{ cursor: 'pointer', userSelect: 'none' }}
+                            title="點擊切換 待收 / 已收"
+                            onClick={() => togglePayment(lesson)}
+                          >
+                            <DollarOutlined /> NT$ {lesson.fee.toLocaleString()} · {lesson.paymentStatus === 'paid' ? '已收' : lesson.paymentStatus === 'waived' ? '免收' : '待收'}
+                          </Tag>
+                        ) : null}
+                      </Space>
+                      <div className="lesson-meta">{lesson.location}</div>
+                    </div>
+                    <Space size={6}>
+                      <Button type="primary" size="small" onClick={() => markStatus(lesson.id, 'completed')}>完課</Button>
+                      <Button danger size="small" onClick={() => markStatus(lesson.id, 'leave')}>請假</Button>
                     </Space>
-                    <div className="lesson-meta">{lesson.location}</div>
                   </div>
-                  <Space size={6}>
-                    <Button type="primary" size="small" onClick={() => markStatus(lesson.id, 'completed')}>完課</Button>
-                    <Button danger size="small" onClick={() => markStatus(lesson.id, 'leave')}>請假</Button>
-                  </Space>
+                  {student?.teachingNotes ? (
+                    <div className="dashboard-teaching-note">
+                      <BookOutlined style={{ color: '#d97706', marginTop: 3, flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <Flex justify="space-between" align="center" style={{ marginBottom: 2 }}>
+                          <Typography.Text strong style={{ fontSize: 13, color: '#b45309' }}>
+                            課前提醒 / 教學筆記
+                          </Typography.Text>
+                          <Space size={8}>
+                            <Button
+                              type="link"
+                              size="small"
+                              style={{ padding: 0, height: 'auto', fontSize: 12 }}
+                              onClick={() => openNoteModal(student)}
+                            >
+                              編輯筆記
+                            </Button>
+                            <Popconfirm
+                              title="確定清空此學員的教學筆記？"
+                              okText="全部清除"
+                              cancelText="取消"
+                              onConfirm={() => {
+                                updateStudentTeachingNotes(student.id, '')
+                                void message.success(`已清空【${student.name}】的教學筆記`)
+                              }}
+                            >
+                              <Button
+                                type="link"
+                                danger
+                                size="small"
+                                style={{ padding: 0, height: 'auto', fontSize: 12 }}
+                              >
+                                全部清除
+                              </Button>
+                            </Popconfirm>
+                          </Space>
+                        </Flex>
+                        <div className="dashboard-teaching-note-content">
+                          {student.teachingNotes}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </List.Item>
             )
@@ -238,5 +351,52 @@ export default function DashboardPage() {
         />
       )}
     </Card>
+
+    {/* 快速編輯課前教學筆記 Modal */}
+    <Modal
+      title={
+        <Space>
+          <BookOutlined style={{ color: '#d97706' }} />
+          <span>教學筆記與課前叮嚀 · {noteModalStudent?.name}</span>
+        </Space>
+      }
+      open={Boolean(noteModalStudent)}
+      onCancel={() => setNoteModalStudent(null)}
+      footer={
+        <Flex justify="space-between" align="center" style={{ width: '100%' }}>
+          <Button
+            danger
+            onClick={() => setNoteModalText('')}
+          >
+            全部清除
+          </Button>
+          <Space>
+            <Button onClick={() => setNoteModalStudent(null)}>取消</Button>
+            <Button
+              type="primary"
+              onClick={() => {
+                if (noteModalStudent) {
+                  updateStudentTeachingNotes(noteModalStudent.id, noteModalText)
+                  void message.success(`已更新【${noteModalStudent.name}】的教學筆記`)
+                  setNoteModalStudent(null)
+                }
+              }}
+            >
+              儲存筆記
+            </Button>
+          </Space>
+        </Flex>
+      }
+    >
+      <Typography.Paragraph type="secondary" style={{ fontSize: 13, marginBottom: 8 }}>
+        記錄約 5 行簡易進度與備忘（當主頁通知上這堂課時會自動出現提醒老師）：
+      </Typography.Paragraph>
+      <Input.TextArea
+        rows={5}
+        value={noteModalText}
+        onChange={(e) => setNoteModalText(e.target.value)}
+        placeholder="例如：上次練到第 40 首，今天先驗收右手節奏；記得提醒家長下週請假..."
+      />
+    </Modal>
   </>
 }

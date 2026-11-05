@@ -552,6 +552,15 @@ export default function CalendarPage() {
           description="系統已自動帶入學員與科目，補課預設學費已標記為已結清。"
         />
       )}
+      {selectedStudent?.teachingNotes && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16, background: 'rgba(234, 179, 8, 0.08)', borderColor: 'rgba(234, 179, 8, 0.3)' }}
+          message={<Typography.Text strong style={{ color: '#b45309' }}>學員教學筆記叮嚀</Typography.Text>}
+          description={<div style={{ whiteSpace: 'pre-line', fontSize: 13 }}>{selectedStudent.teachingNotes}</div>}
+        />
+      )}
       <Form
         form={form}
         layout="vertical"
