@@ -101,9 +101,15 @@ export default function DashboardPage() {
   }
 
   const togglePayment = (lesson: Lesson) => {
-    const nextStatus: PaymentStatus = lesson.paymentStatus === 'paid' ? 'unpaid' : 'paid'
+    const cycle: Record<PaymentStatus, PaymentStatus> = {
+      unpaid: 'paid',
+      paid: 'waived',
+      waived: 'unpaid',
+    }
+    const nextStatus: PaymentStatus = cycle[lesson.paymentStatus ?? 'unpaid']
     updateLessonPaymentStatus(lesson.id, nextStatus)
-    void message.success(nextStatus === 'paid' ? `已標記 ${lesson.studentName} 為已收款` : `已標記 ${lesson.studentName} 為待收款`)
+    const label = nextStatus === 'paid' ? '已收款' : nextStatus === 'waived' ? '免收/包月折抵' : '待收款'
+    void message.success(`已將【${lesson.studentName}】此堂設為：${label}`)
   }
 
   const checkConflict = (target: Lesson) => {
@@ -233,10 +239,10 @@ export default function DashboardPage() {
                             <Tag
                               color={lesson.paymentStatus === 'paid' ? 'success' : lesson.paymentStatus === 'waived' ? 'default' : 'warning'}
                               style={{ cursor: 'pointer', userSelect: 'none' }}
-                              title="點擊切換 待收 / 已收"
+                              title="點擊切換 待收 ➔ 已收 ➔ 包月免收"
                               onClick={() => togglePayment(lesson)}
                             >
-                              <DollarOutlined /> NT$ {lesson.fee.toLocaleString()} · {lesson.paymentStatus === 'paid' ? '已收' : lesson.paymentStatus === 'waived' ? '免收' : '待收'}
+                              <DollarOutlined /> NT$ {lesson.fee.toLocaleString()} · {lesson.paymentStatus === 'paid' ? '已收' : lesson.paymentStatus === 'waived' ? '包月/免收' : '待收'}
                             </Tag>
                           ) : null}
                         </Space>
@@ -429,10 +435,10 @@ export default function DashboardPage() {
                             <Tag
                               color={lesson.paymentStatus === 'paid' ? 'success' : lesson.paymentStatus === 'waived' ? 'default' : 'warning'}
                               style={{ cursor: 'pointer', userSelect: 'none' }}
-                              title="點擊切換 待收 / 已收"
+                              title="點擊切換 待收 ➔ 已收 ➔ 包月免收"
                               onClick={() => togglePayment(lesson)}
                             >
-                              <DollarOutlined /> NT$ {lesson.fee.toLocaleString()} · {lesson.paymentStatus === 'paid' ? '已收' : lesson.paymentStatus === 'waived' ? '免收' : '待收'}
+                              <DollarOutlined /> NT$ {lesson.fee.toLocaleString()} · {lesson.paymentStatus === 'paid' ? '已收' : lesson.paymentStatus === 'waived' ? '包月/免收' : '待收'}
                             </Tag>
                           ) : null}
                         </Space>

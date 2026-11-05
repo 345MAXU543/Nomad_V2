@@ -169,6 +169,22 @@ export default function CalendarPage() {
     setDelayCascade(true)
   }
 
+  const [slotChoiceModal, setSlotChoiceModal] = useState<{ date: Dayjs; hour: number } | null>(null)
+
+  const openCommuteDrawerForSlot = (date: Dayjs, hour: number) => {
+    setScheduleDrawerOpen(false)
+    setCommuteDrawerOpen(true)
+    const start = date.hour(hour).minute(0)
+    const end = start.add(settings.defaultDuration ?? 60, 'minute')
+    commuteForm.setFieldsValue({
+      date,
+      timeRange: [start, end],
+      origin: settings.defaultLocation || '教室 A',
+      destination: '',
+      notes: '',
+    })
+  }
+
   const openCommuteDrawer = () => {
     setScheduleDrawerOpen(false)
     setCommuteDrawerOpen(true)
@@ -408,6 +424,11 @@ export default function CalendarPage() {
     const fallbackFee = student.defaultFee ?? settings.defaultFee ?? 1200
     const fee = values.fee !== undefined ? values.fee : fallbackFee
 
+    if (values.endTime.isBefore(values.startTime) || values.endTime.isSame(values.startTime)) {
+      void message.error('結束時間必須晚於開始時間，請重新檢查')
+      return
+    }
+
     // 補課儲存邏輯
     if (makeupForLesson) {
       addLesson({
@@ -498,15 +519,28 @@ export default function CalendarPage() {
         form.setFieldValue('fee', studentFee)
       }
     }
-    if (changed.startTime && !form.getFieldValue('endTime')) {
-      form.setFieldValue('endTime', changed.startTime.add(settings.defaultDuration, 'minute'))
+    if (changed.startTime) {
+      const prevStart = form.getFieldValue('startTime')
+      const prevEnd = form.getFieldValue('endTime')
+      let duration = settings.defaultDuration ?? 60
+      if (prevEnd && prevStart && prevEnd.isAfter(prevStart)) {
+        duration = prevEnd.diff(prevStart, 'minute')
+      }
+      form.setFieldValue('endTime', changed.startTime.add(duration, 'minute'))
+      void form.validateFields(['endTime'])
     }
   }
 
   const togglePayment = (lesson: Lesson) => {
-    const nextStatus: PaymentStatus = lesson.paymentStatus === 'paid' ? 'unpaid' : 'paid'
+    const cycle: Record<PaymentStatus, PaymentStatus> = {
+      unpaid: 'paid',
+      paid: 'waived',
+      waived: 'unpaid',
+    }
+    const nextStatus: PaymentStatus = cycle[lesson.paymentStatus ?? 'unpaid']
     updateLessonPaymentStatus(lesson.id, nextStatus)
-    void message.success(nextStatus === 'paid' ? `已標記 ${lesson.studentName} 為已收款` : `已標記 ${lesson.studentName} 為待收款`)
+    const label = nextStatus === 'paid' ? '已收款' : nextStatus === 'waived' ? '免收/包月折抵' : '待收款'
+    void message.success(`已將【${lesson.studentName}】此堂設為：${label}`)
   }
 
   const toggleExcludeDate = (dateStr: string) => {
@@ -549,10 +583,10 @@ export default function CalendarPage() {
                 <Tag
                   color={lesson.paymentStatus === 'paid' ? 'success' : lesson.paymentStatus === 'waived' ? 'default' : 'warning'}
                   style={{ cursor: 'pointer', userSelect: 'none' }}
-                  title="點擊切換 待收 / 已收"
+                  title="點擊切換 待收 ➔ 已收 ➔ 包月免收"
                   onClick={() => togglePayment(lesson)}
                 >
-                  <DollarOutlined /> NT$ {lesson.fee.toLocaleString()} · {lesson.paymentStatus === 'paid' ? '已收' : lesson.paymentStatus === 'waived' ? '免收' : '待收'}
+                  <DollarOutlined /> NT$ {lesson.fee.toLocaleString()} · {lesson.paymentStatus === 'paid' ? '已收' : lesson.paymentStatus === 'waived' ? '包月/免收' : '待收'}
                 </Tag>
               ) : null}
             </Space>
@@ -722,6 +756,22 @@ export default function CalendarPage() {
                   const startH = parseInt(c.startTime.split(':')[0], 10)
                   return startH === hour
                 })
+                const ongoingLessons = selectedLessons.filter((l) => {
+                  const [sh, sm] = l.startTime.split(':').map(Number)
+                  const [eh, em] = l.endTime.split(':').map(Number)
+                  const slotStart = hour * 60
+                  const startMin = sh * 60 + sm
+                  const endMin = eh * 60 + em
+                  return startMin < slotStart && endMin > slotStart
+                })
+                const ongoingCommutes = selectedCommutes.filter((c) => {
+                  const [sh, sm] = c.startTime.split(':').map(Number)
+                  const [eh, em] = c.endTime.split(':').map(Number)
+                  const slotStart = hour * 60
+                  const startMin = sh * 60 + sm
+                  const endMin = eh * 60 + em
+                  return startMin < slotStart && endMin > slotStart
+                })
 
                 return (
                   <div key={hour} className="day-timeline-row">
@@ -729,6 +779,33 @@ export default function CalendarPage() {
                       {String(hour).padStart(2, '0')}:00
                     </div>
                     <div className="day-timeline-content">
+                      {ongoingLessons.map((l) => (
+                        <div key={`ongoing-${l.id}`} className="day-timeline-ongoing-item">
+                          <Flex justify="space-between" align="center" wrap="wrap" gap={6}>
+                            <Space size={8}>
+                              <Tag color="cyan">授課進行中</Tag>
+                              <Typography.Text strong style={{ fontSize: 13 }}>
+                                延續【{l.studentName} · {l.subject}】（至 {l.endTime} 完課）
+                              </Typography.Text>
+                            </Space>
+                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                              {l.location}
+                            </Typography.Text>
+                          </Flex>
+                        </div>
+                      ))}
+                      {ongoingCommutes.map((c) => (
+                        <div key={`ongoing-c-${c.id}`} className="day-timeline-ongoing-item">
+                          <Flex justify="space-between" align="center" wrap="wrap" gap={6}>
+                            <Space size={8}>
+                              <Tag color="orange">🚗 移動途中</Tag>
+                              <Typography.Text strong style={{ fontSize: 13 }}>
+                                前往【{c.destination}】中（預估 {c.endTime} 抵達）
+                              </Typography.Text>
+                            </Space>
+                          </Flex>
+                        </div>
+                      ))}
                       {hourCommutes.map((commute) => (
                         <div key={commute.id} className="day-timeline-commute-item">
                           <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
@@ -804,7 +881,7 @@ export default function CalendarPage() {
                                           : 'warning'
                                       }
                                       style={{ cursor: 'pointer' }}
-                                      title="點擊切換 待收 / 已收"
+                                      title="點擊切換 待收 ➔ 已收 ➔ 包月免收"
                                       onClick={() => togglePayment(lesson)}
                                     >
                                       <DollarOutlined /> NT$ {lesson.fee.toLocaleString()} ·{' '}
@@ -903,22 +980,30 @@ export default function CalendarPage() {
                             </div>
                           )
                         })
-                      ) : hourCommutes.length === 0 ? (
-                        <div
-                          className="day-timeline-empty"
-                          onClick={() => openNewLessonForSlot(selectedDate, hour)}
-                        >
+                      ) : (hourCommutes.length === 0 && ongoingLessons.length === 0 && ongoingCommutes.length === 0) ? (
+                        <div className="day-timeline-empty">
                           <span style={{ fontSize: 13, color: '#94a3b8' }}>
                             無排程
                           </span>
-                          <Button
-                            type="link"
-                            size="small"
-                            icon={<PlusOutlined />}
-                            style={{ padding: 0, height: 'auto' }}
-                          >
-                            排課
-                          </Button>
+                          <Space size={8}>
+                            <Button
+                              type="link"
+                              size="small"
+                              icon={<PlusOutlined />}
+                              style={{ padding: 0, height: 'auto' }}
+                              onClick={() => openNewLessonForSlot(selectedDate, hour)}
+                            >
+                              排課
+                            </Button>
+                            <Button
+                              type="link"
+                              size="small"
+                              style={{ padding: 0, height: 'auto', color: '#ea580c' }}
+                              onClick={() => openCommuteDrawerForSlot(selectedDate, hour)}
+                            >
+                              🚗 通勤
+                            </Button>
+                          </Space>
                         </div>
                       ) : null}
                     </div>
@@ -1049,7 +1134,7 @@ export default function CalendarPage() {
                             Math.floor(clickY / HOUR_ROW_HEIGHT) + TIMELINE_START_HOUR
                           )
                         )
-                        openNewLessonForSlot(day, clickedHour)
+                        setSlotChoiceModal({ date: day, hour: clickedHour })
                       }}
                     >
                       {/* 今天紅線指示 */}
@@ -1157,16 +1242,97 @@ export default function CalendarPage() {
               value={selectedDate}
               onSelect={setSelectedDate}
               dateCellRender={(current) => {
-                const dayLessons = lessons.filter((lesson) => lesson.date === current.format('YYYY-MM-DD'))
-                if (dayLessons.length === 0) return null
+                const dateStr = current.format('YYYY-MM-DD')
+                const dayLessons = lessons.filter((lesson) => lesson.date === dateStr)
+                const dayCommutes = commutes.filter((commute) => commute.date === dateStr)
+                if (dayLessons.length === 0 && dayCommutes.length === 0) return null
                 const hasScheduled = dayLessons.some((lesson) => lesson.status === 'scheduled')
-                const complete = dayLessons.every((lesson) => lesson.status === 'completed')
-                return <span className={`calendar-lesson-dot ${complete && !hasScheduled ? 'is-complete' : ''}`} aria-label="有排課" />
+                const complete = dayLessons.length > 0 && dayLessons.every((lesson) => lesson.status === 'completed')
+                return (
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 3, marginTop: 2 }}>
+                    {dayLessons.length > 0 && (
+                      <span className={`calendar-lesson-dot ${complete && !hasScheduled ? 'is-complete' : ''}`} aria-label="有排課" />
+                    )}
+                    {dayCommutes.length > 0 && (
+                      <span style={{ display: 'block', width: 6, height: 6, borderRadius: '50%', backgroundColor: '#f97316' }} aria-label="有通勤" />
+                    )}
+                  </div>
+                )
               }}
             />
           </Card>
-          <Card className="surface-card" title={`${selectedDate.format('MM 月 DD 日')}・當日課程`}>
-            {selectedLessons.length ? <List className="lesson-list" dataSource={selectedLessons} renderItem={renderLesson} /> : <Empty description="當日沒有課程" />}
+          <Card
+            className="surface-card"
+            title={`${selectedDate.format('MM 月 DD 日')}・當日行程`}
+            extra={
+              <Space>
+                {selectedLessons.length > 0 && <Tag color="blue">{selectedLessons.length} 堂課</Tag>}
+                {selectedCommutes.length > 0 && <Tag color="orange">{selectedCommutes.length} 趟通勤</Tag>}
+              </Space>
+            }
+          >
+            {(() => {
+              const merged = [
+                ...selectedLessons.map((l) => ({ type: 'lesson' as const, data: l, startTime: l.startTime })),
+                ...selectedCommutes.map((c) => ({ type: 'commute' as const, data: c, startTime: c.startTime })),
+              ].sort((a, b) => a.startTime.localeCompare(b.startTime))
+
+              if (merged.length === 0) {
+                return <Empty description="當日沒有課程或通勤排程" />
+              }
+
+              return (
+                <List
+                  className="lesson-list"
+                  dataSource={merged}
+                  renderItem={(item) => {
+                    if (item.type === 'lesson') {
+                      return renderLesson(item.data)
+                    }
+                    const commute = item.data
+                    return (
+                      <List.Item>
+                        <div className="lesson-row">
+                          <div className="lesson-time" style={{ color: '#ea580c' }}>
+                            🚗 {commute.startTime} - {commute.endTime}
+                          </div>
+                          <div className="lesson-main">
+                            <Space size={6} wrap align="center">
+                              <span className="lesson-name">通勤：{commute.origin} ➔ {commute.destination}</span>
+                              {commute.notes ? <Tag>{commute.notes}</Tag> : null}
+                            </Space>
+                            <div className="lesson-meta">
+                              <CompassOutlined /> Google 地圖路線規劃
+                              <Button
+                                type="link"
+                                size="small"
+                                icon={<CompassOutlined />}
+                                href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(commute.origin)}&destination=${encodeURIComponent(commute.destination)}`}
+                                target="_blank"
+                                style={{ padding: '0 4px', height: 'auto', fontSize: 13, marginLeft: 6 }}
+                              >
+                                導航
+                              </Button>
+                            </div>
+                          </div>
+                          <Popconfirm
+                            title="確定刪除此通勤排程？"
+                            okText="刪除"
+                            cancelText="取消"
+                            onConfirm={() => {
+                              deleteCommute(commute.id)
+                              void message.success('已刪除通勤排程')
+                            }}
+                          >
+                            <Button danger type="text" size="small">刪除</Button>
+                          </Popconfirm>
+                        </div>
+                      </List.Item>
+                    )
+                  }}
+                />
+              )
+            })()}
           </Card>
         </>
       )}
@@ -1269,12 +1435,84 @@ export default function CalendarPage() {
           <Form.Item name="date" label="上課日期" rules={[{ required: true, message: '請選擇日期' }]}>
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
+          {selectedStudent?.billingCycle === 'monthly' && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message="此學員為【包月制】繳費"
+              description={
+                <div style={{ fontSize: 13 }}>
+                  <div>若本月學費已整包預先收取，本堂可設為「已繳款」或「免收/包月折抵」，避免重複計算待收金額。</div>
+                  <Space size={8} style={{ marginTop: 8 }}>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        form.setFieldValue('paymentStatus', 'paid')
+                        void message.info('已設為：已繳款')
+                      }}
+                    >
+                      設為已繳款
+                    </Button>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        form.setFieldValue('paymentStatus', 'waived')
+                        form.setFieldValue('fee', 0)
+                        void message.info('已設為：免收/包月折抵 (NT$ 0)')
+                      }}
+                    >
+                      設為免收 (NT$ 0)
+                    </Button>
+                  </Space>
+                </div>
+              }
+            />
+          )}
+
           <Form.Item name="startTime" label="開始時間" rules={[{ required: true, message: '請選擇開始時間' }]}>
             <TimePicker style={{ width: '100%' }} format="HH:mm" />
           </Form.Item>
-          <Form.Item name="endTime" label="結束時間" rules={[{ required: true, message: '請選擇結束時間' }]}>
+          <Form.Item
+            name="endTime"
+            label="結束時間"
+            dependencies={['startTime']}
+            rules={[
+              { required: true, message: '請選擇結束時間' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  const startTime = getFieldValue('startTime')
+                  if (!value || !startTime) return Promise.resolve()
+                  if (value.isBefore(startTime) || value.isSame(startTime)) {
+                    return Promise.reject(new Error('結束時間必須晚於開始時間'))
+                  }
+                  return Promise.resolve()
+                },
+              }),
+            ]}
+          >
             <TimePicker style={{ width: '100%' }} format="HH:mm" />
           </Form.Item>
+
+          <div style={{ marginBottom: 16 }}>
+            <Space size={6} wrap align="center">
+              <Typography.Text type="secondary" style={{ fontSize: 13 }}>常用時長：</Typography.Text>
+              {[50, 60, 90].map((mins) => (
+                <Button
+                  key={mins}
+                  size="small"
+                  onClick={() => {
+                    const start = form.getFieldValue('startTime') || dayjs().hour(14).minute(0)
+                    form.setFieldValue('startTime', start)
+                    form.setFieldValue('endTime', start.add(mins, 'minute'))
+                    void form.validateFields(['endTime'])
+                  }}
+                >
+                  +{mins} 分鐘
+                </Button>
+              ))}
+            </Space>
+          </div>
 
           {/* 衝突提示（單堂，非侵入式內嵌提示，不彈大彈窗） */}
           {!formIsRecurring && conflictCount > 0 && (
@@ -1579,6 +1817,54 @@ export default function CalendarPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* 週時間軸時段行程選擇 Modal */}
+      <Modal
+        title={
+          <Space>
+            <span>新增時段排程</span>
+            <Tag color="blue">{slotChoiceModal?.date.format('MM/DD (dd)')} {String(slotChoiceModal?.hour).padStart(2, '0')}:00</Tag>
+          </Space>
+        }
+        open={Boolean(slotChoiceModal)}
+        onCancel={() => setSlotChoiceModal(null)}
+        footer={null}
+        width={360}
+        centered
+      >
+        <Typography.Paragraph type="secondary" style={{ fontSize: 13, marginBottom: 16 }}>
+          請選擇您要在此時段建立的行程種類：
+        </Typography.Paragraph>
+        <Space direction="vertical" style={{ width: '100%' }} size={12}>
+          <Button
+            type="primary"
+            block
+            size="large"
+            icon={<BookOutlined />}
+            onClick={() => {
+              if (slotChoiceModal) {
+                openNewLessonForSlot(slotChoiceModal.date, slotChoiceModal.hour)
+                setSlotChoiceModal(null)
+              }
+            }}
+          >
+            預約學員排課
+          </Button>
+          <Button
+            block
+            size="large"
+            style={{ borderColor: '#f97316', color: '#ea580c' }}
+            onClick={() => {
+              if (slotChoiceModal) {
+                openCommuteDrawerForSlot(slotChoiceModal.date, slotChoiceModal.hour)
+                setSlotChoiceModal(null)
+              }
+            }}
+          >
+            🚗 安排跨點通勤
+          </Button>
+        </Space>
       </Modal>
 
       {/* 週期性課程刪除確認 Modal（受控狀態，保證在任何情境下都能穩定彈出） */}
