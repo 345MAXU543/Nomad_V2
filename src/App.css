@@ -71,4 +71,48 @@
 .student-card-clickable { cursor: pointer; border-radius: 8px; padding: 8px; transition: background .15s ease; }
 .student-card-clickable:hover { background: rgba(59, 130, 246, .05); }
 .is-dark .student-card-clickable:hover { background: rgba(255, 255, 255, .04); }
-@media (max-width: 576px) { .app-content { padding: 16px 12px 32px; } .page-heading { margin-bottom: 16px; } .calendar-toolbar .ant-segmented { max-width: calc(100vw - 158px); overflow: hidden; } .lesson-time { width: 92px; } .lesson-row { align-items: flex-start; flex-wrap: wrap; } .lesson-main { flex: 1 1 150px; } .lesson-actions { width: 100%; justify-content: flex-end; margin-top: 4px; } .stats-heading { align-items: flex-start; flex-direction: column; } .install-banner { padding-inline: 12px; } .install-banner-message { font-size: 14px; } .course-type-actions .ant-btn { padding-inline: 4px; } .dashboard-teaching-note, .dashboard-add-note-link { margin-left: 0; } }
+@media (max-width: 576px) { .app-content { padding: 16px 12px 32px; } .page-heading { margin-bottom: 16px; } .calendar-toolbar .ant-segmented { max-width: calc(100vw - 60px); overflow-x: auto; } .lesson-time { width: 92px; } .lesson-row { align-items: flex-start; flex-wrap: wrap; } .lesson-main { flex: 1 1 150px; } .lesson-actions { width: 100%; justify-content: flex-end; margin-top: 4px; } .stats-heading { align-items: flex-start; flex-direction: column; } .install-banner { padding-inline: 12px; } .install-banner-message { font-size: 14px; } .course-type-actions .ant-btn { padding-inline: 4px; } .dashboard-teaching-note, .dashboard-add-note-link { margin-left: 0; } }
+
+/* Timeline & Calendar Views */
+.week-timeline-container { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 12px; border: 1px solid rgba(15, 23, 42, .08); background: #ffffff; margin-bottom: 16px; }
+.is-dark .week-timeline-container { border-color: rgba(255, 255, 255, .12); background: #141414; }
+.week-timeline-inner { min-width: 740px; }
+.week-timeline-header { display: grid; grid-template-columns: 56px repeat(7, 1fr); border-bottom: 2px solid rgba(15, 23, 42, .08); background: #f8fafc; position: sticky; top: 0; z-index: 10; }
+.is-dark .week-timeline-header { border-bottom-color: rgba(255, 255, 255, .12); background: #1a1a1a; }
+.week-day-header { padding: 8px 4px; text-align: center; border-left: 1px solid rgba(15, 23, 42, .06); cursor: pointer; transition: background .15s ease; user-select: none; }
+.week-day-header:hover { background: rgba(59, 130, 246, .08); }
+.is-dark .week-day-header { border-left-color: rgba(255, 255, 255, .08); }
+.week-day-header.is-today { background: rgba(59, 130, 246, .12); }
+.week-day-header.is-selected { outline: 2px solid #3b82f6; outline-offset: -2px; }
+.week-timeline-body { display: grid; grid-template-columns: 56px repeat(7, 1fr); position: relative; }
+.week-time-sidebar { border-right: 1px solid rgba(15, 23, 42, .08); }
+.is-dark .week-time-sidebar { border-right-color: rgba(255, 255, 255, .1); }
+.week-hour-label { height: 60px; padding-right: 6px; text-align: right; font-size: 11px; font-weight: 600; color: #94a3b8; transform: translateY(-8px); }
+.week-day-column { position: relative; height: 900px; border-left: 1px solid rgba(15, 23, 42, .06); background-image: linear-gradient(to bottom, rgba(15, 23, 42, .06) 1px, transparent 1px); background-size: 100% 60px; }
+.is-dark .week-day-column { border-left-color: rgba(255, 255, 255, .08); background-image: linear-gradient(to bottom, rgba(255, 255, 255, .08) 1px, transparent 1px); }
+.week-day-column.is-today { background-color: rgba(59, 130, 246, .03); }
+.week-lesson-block { position: absolute; left: 3px; right: 3px; border-radius: 6px; padding: 4px 6px; cursor: pointer; overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, .08); transition: transform .12s ease, box-shadow .12s ease; z-index: 5; }
+.week-lesson-block:hover { transform: scale(1.02); box-shadow: 0 4px 10px rgba(0, 0, 0, .15); z-index: 8; }
+.week-lesson-block.status-scheduled { background: rgba(59, 130, 246, .15); border-left: 4px solid #3b82f6; color: #1e3a8a; }
+.is-dark .week-lesson-block.status-scheduled { background: rgba(59, 130, 246, .25); color: #bfdbfe; }
+.week-lesson-block.status-completed { background: rgba(34, 197, 94, .15); border-left: 4px solid #22c55e; color: #14532d; }
+.is-dark .week-lesson-block.status-completed { background: rgba(34, 197, 94, .25); color: #bbf7d0; }
+.week-lesson-block.status-leave { background: rgba(245, 158, 11, .15); border-left: 4px solid #f59e0b; color: #78350f; }
+.is-dark .week-lesson-block.status-leave { background: rgba(245, 158, 11, .25); color: #fef08a; }
+.week-block-time { font-size: 11px; font-weight: 700; line-height: 1.2; }
+.week-block-title { font-size: 12px; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.week-block-sub { font-size: 11px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.day-timeline-row { display: flex; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid rgba(15, 23, 42, .06); }
+.is-dark .day-timeline-row { border-bottom-color: rgba(255, 255, 255, .08); }
+.day-timeline-hour { width: 68px; font-size: 13px; font-weight: 700; color: #64748b; padding-top: 4px; flex-shrink: 0; }
+.is-dark .day-timeline-hour { color: #94a3b8; }
+.day-timeline-content { flex: 1; min-width: 0; }
+.day-timeline-empty { padding: 6px 12px; border: 1px dashed rgba(15, 23, 42, .15); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; transition: all .15s ease; cursor: pointer; }
+.day-timeline-empty:hover { border-color: #3b82f6; background: rgba(59, 130, 246, .03); color: #3b82f6; }
+.is-dark .day-timeline-empty { border-color: rgba(255, 255, 255, .15); }
+.day-timeline-card-item { background: rgba(15, 23, 42, .02); border: 1px solid rgba(15, 23, 42, .08); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+.is-dark .day-timeline-card-item { background: rgba(255, 255, 255, .03); border-color: rgba(255, 255, 255, .1); }
+.day-view-teaching-note { margin-top: 6px; padding: 6px 10px; background: rgba(234, 179, 8, .08); border-left: 3px solid #eab308; border-radius: 4px; font-size: 13px; color: #b45309; }
+.is-dark .day-view-teaching-note { color: #fde047; background: rgba(234, 179, 8, .12); }
+.timeline-now-indicator { position: absolute; left: 0; right: 0; height: 2px; background: #ef4444; z-index: 9; pointer-events: none; }
+.timeline-now-indicator::before { content: ''; position: absolute; left: -3px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; }
