@@ -45,16 +45,29 @@ export interface Lesson {
   makeupForLessonId?: string
 }
 
+export interface Commute {
+  id: string
+  date: string
+  startTime: string
+  endTime: string
+  origin: string
+  destination: string
+  notes?: string
+}
+
 export interface AppSettings {
   defaultDuration: number
   defaultLocation: string
   defaultFee?: number
   isDarkMode: boolean
   courseTypes: string[]
+  enableNotifications?: boolean
+  notificationLeadMinutes?: number
 }
 
 export interface BackupPayload {
   students: Student[]
   lessons: Lesson[]
+  commutes?: Commute[]
   settings: AppSettings
 }

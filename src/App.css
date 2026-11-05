@@ -116,3 +116,11 @@
 .is-dark .day-view-teaching-note { color: #fde047; background: rgba(234, 179, 8, .12); }
 .timeline-now-indicator { position: absolute; left: 0; right: 0; height: 2px; background: #ef4444; z-index: 9; pointer-events: none; }
 .timeline-now-indicator::before { content: ''; position: absolute; left: -3px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; }
+
+/* Commute Blocks (Week & Day Views) */
+.week-commute-block { position: absolute; left: 3px; right: 3px; border-radius: 6px; padding: 3px 6px; cursor: pointer; overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, .08); transition: transform .12s ease, box-shadow .12s ease; z-index: 6; background: rgba(249, 115, 22, .18); border-left: 4px solid #f97316; color: #9a3412; }
+.week-commute-block:hover { transform: scale(1.02); box-shadow: 0 4px 10px rgba(0, 0, 0, .15); z-index: 8; }
+.is-dark .week-commute-block { background: rgba(249, 115, 22, .28); color: #fdba74; }
+.day-timeline-commute-item { background: rgba(249, 115, 22, .06); border: 1px dashed rgba(249, 115, 22, .35); border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; }
+.is-dark .day-timeline-commute-item { background: rgba(249, 115, 22, .12); border-color: rgba(249, 115, 22, .45); }
+

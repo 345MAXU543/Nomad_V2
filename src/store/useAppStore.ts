@@ -1,9 +1,10 @@
 import dayjs from 'dayjs'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import type { AppSettings, BackupPayload, Lesson, LessonStatus, PaymentStatus, Student } from '../types'
+import type { AppSettings, BackupPayload, Commute, Lesson, LessonStatus, PaymentStatus, Student } from '../types'
 
 type AppState = BackupPayload & {
+  commutes: Commute[]
   pendingMakeupLessonId: string | null
   setPendingMakeupLessonId: (id: string | null) => void
   addStudent: (student: Omit<Student, 'id'>) => void
@@ -20,6 +21,9 @@ type AppState = BackupPayload & {
   markLeaveWaived: (lessonId: string) => void
   updateLessonPaymentStatus: (id: string, status: PaymentStatus) => void
   batchUpdateLessonPaymentStatus: (ids: string[], status: PaymentStatus) => void
+  addCommute: (commute: Omit<Commute, 'id'>) => void
+  deleteCommute: (id: string) => void
+  delayLessons: (options: { targetLessonId: string; delayMinutes: number; cascadeSubsequent: boolean }) => void
   updateSettings: (data: Partial<AppSettings>) => void
   addCourseType: (name: string) => void
   renameCourseType: (oldName: string, newName: string) => void
@@ -37,6 +41,8 @@ const normalizeSettings = (settings: Partial<AppSettings>): AppSettings => ({
   defaultFee: settings.defaultFee ?? 1200,
   isDarkMode: settings.isDarkMode ?? false,
   courseTypes: settings.courseTypes?.length ? settings.courseTypes : defaultCourseTypes,
+  enableNotifications: settings.enableNotifications ?? false,
+  notificationLeadMinutes: settings.notificationLeadMinutes ?? 15,
 })
 
 type StoredStudent = Omit<Student, 'subjects'> & { subjects?: string[] }
@@ -55,7 +61,7 @@ const normalizeStudent = (student: StoredStudent): Student => {
   }
 }
 
-export const createSeedData = (): BackupPayload => {
+export const createSeedData = (): BackupPayload & { commutes: Commute[] } => {
   const students: Student[] = [
     { id: 'student-lin', name: '林小安', subjects: ['鋼琴', '編曲'], locationType: '工作室', defaultLocation: '教室 A', phone: '0912-345-678', active: true, avatarColor: '#7c3aed', gender: '女', defaultFee: 1200, billingCycle: 'monthly', teachingNotes: '上次進度：小奏鳴曲 Op.36 No.1 第一樂章練習完畢。\n本次重點：右手連續十六音符觸鍵乾淨度，強弱踏板配合。\n課前叮嚀：提醒家長下週需帶新琴譜，並討論 12 月檢定考時間。' },
     { id: 'student-chen', name: '陳宇恩', subjects: ['吉他', '小提琴'], locationType: '到府', defaultLocation: '到府授課・中山區', phone: '0922-345-678', active: true, avatarColor: '#0f766e', gender: '男', defaultFee: 1400, billingCycle: 'perLesson', teachingNotes: '進度：民謠吉他刷弦切音技巧演練。\n課前叮嚀：提醒帶節拍器與調音器。\n學費：本月學費已結清。' },
@@ -78,6 +84,17 @@ export const createSeedData = (): BackupPayload => {
       lesson('lesson-tomorrow-2', students[3], 1, '15:30', '16:30', 'scheduled', 'unpaid'),
     ],
     settings: normalizeSettings({}),
+    commutes: [
+      {
+        id: 'commute-1',
+        date: today.format('YYYY-MM-DD'),
+        startTime: '12:30',
+        endTime: '13:30',
+        origin: '教室 A',
+        destination: '到府授課・中山區',
+        notes: '搭乘捷運淡水信義線轉公車',
+      },
+    ],
   }
 }
 
@@ -85,6 +102,48 @@ export const useAppStore = create<AppState>()(persist((set) => ({
   ...createSeedData(),
   pendingMakeupLessonId: null,
   setPendingMakeupLessonId: (id) => set({ pendingMakeupLessonId: id }),
+  addCommute: (commute) => set((state) => ({
+    commutes: [...(state.commutes || []), { ...commute, id: createId() }],
+  })),
+  deleteCommute: (id) => set((state) => ({
+    commutes: (state.commutes || []).filter((c) => c.id !== id),
+  })),
+  delayLessons: ({ targetLessonId, delayMinutes, cascadeSubsequent }) => set((state) => {
+    const targetLesson = state.lessons.find((l) => l.id === targetLessonId)
+    if (!targetLesson || delayMinutes === 0) return state
+
+    const shiftTime = (time: string, mins: number) => {
+      const [h, m] = time.split(':').map(Number)
+      const total = h * 60 + m + mins
+      const clamped = Math.min(23 * 60 + 59, Math.max(0, total))
+      const newH = Math.floor(clamped / 60)
+      const newM = clamped % 60
+      return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`
+    }
+
+    const targetDate = targetLesson.date
+    const targetStart = targetLesson.startTime
+
+    const updatedLessons = state.lessons.map((lesson) => {
+      if (lesson.id === targetLessonId) {
+        return {
+          ...lesson,
+          startTime: shiftTime(lesson.startTime, delayMinutes),
+          endTime: shiftTime(lesson.endTime, delayMinutes),
+        }
+      }
+      if (cascadeSubsequent && lesson.date === targetDate && lesson.status === 'scheduled' && lesson.startTime >= targetStart) {
+        return {
+          ...lesson,
+          startTime: shiftTime(lesson.startTime, delayMinutes),
+          endTime: shiftTime(lesson.endTime, delayMinutes),
+        }
+      }
+      return lesson
+    })
+
+    return { lessons: updatedLessons }
+  }),
   addStudent: (student) => set((state) => ({ students: [...state.students, normalizeStudent({ ...student, id: createId() })] })),
   updateStudent: (id, data) => set((state) => {
     const updated = state.students.map((student) => student.id === id ? normalizeStudent({ ...student, ...data }) : student)
@@ -202,6 +261,7 @@ export const useAppStore = create<AppState>()(persist((set) => ({
   importData: (payload) => set({
     students: payload.students.map((student) => normalizeStudent(student)),
     lessons: payload.lessons.map((lesson) => ({ ...lesson, fee: lesson.fee !== undefined ? lesson.fee : 1200, paymentStatus: lesson.paymentStatus ?? 'unpaid' })),
+    commutes: payload.commutes ?? [],
     settings: normalizeSettings(payload.settings),
   }),
   resetToDefault: () => set(createSeedData()),
@@ -215,6 +275,7 @@ export const useAppStore = create<AppState>()(persist((set) => ({
       ...persisted,
       students: persisted.students ? persisted.students.map((student) => normalizeStudent(student)) : currentState.students,
       lessons: persisted.lessons ? persisted.lessons.map((l) => ({ ...l, fee: l.fee !== undefined ? l.fee : 1200, paymentStatus: l.paymentStatus ?? 'unpaid' })) : currentState.lessons,
+      commutes: Array.isArray(persisted.commutes) ? persisted.commutes : (currentState.commutes ?? []),
       settings: normalizeSettings(persisted.settings ?? currentState.settings),
     }
   },

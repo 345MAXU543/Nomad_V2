@@ -33,7 +33,9 @@ import {
   AlertOutlined,
   BookOutlined,
   ClockCircleOutlined,
+  CompassOutlined,
   DollarOutlined,
+  FieldTimeOutlined,
   EnvironmentOutlined,
   LeftOutlined,
   PlusOutlined,
@@ -45,6 +47,14 @@ import { useLocation, useSearchParams } from 'react-router-dom'
 import { useAppStore } from '../store/useAppStore'
 import type { Lesson, LessonStatus, PaymentStatus } from '../types'
 import type { DefaultOptionType } from 'antd/es/select'
+
+type CommuteFormValues = {
+  date: Dayjs
+  timeRange: [Dayjs, Dayjs]
+  origin: string
+  destination: string
+  notes?: string
+}
 
 type LessonFormValues = {
   studentId: string
@@ -127,6 +137,10 @@ export default function CalendarPage() {
   const updateLessonPaymentStatus = useAppStore((state) => state.updateLessonPaymentStatus)
   const pendingMakeupLessonId = useAppStore((state) => state.pendingMakeupLessonId)
   const setPendingMakeupLessonId = useAppStore((state) => state.setPendingMakeupLessonId)
+  const commutes = useAppStore((state) => state.commutes ?? [])
+  const addCommute = useAppStore((state) => state.addCommute)
+  const deleteCommute = useAppStore((state) => state.deleteCommute)
+  const delayLessons = useAppStore((state) => state.delayLessons)
 
   const [searchParams, setSearchParams] = useSearchParams()
   const handledMakeupRef = useRef<string | null>(null)
@@ -141,6 +155,46 @@ export default function CalendarPage() {
   const [makeupForLesson, setMakeupForLesson] = useState<Lesson | null>(null)
   const [excludedDates, setExcludedDates] = useState<string[]>([])
   const [form] = Form.useForm<LessonFormValues>()
+  const [commuteForm] = Form.useForm<CommuteFormValues>()
+  const commuteOrigin = Form.useWatch('origin', commuteForm)
+  const commuteDestination = Form.useWatch('destination', commuteForm)
+
+  const [delayModalLesson, setDelayModalLesson] = useState<Lesson | null>(null)
+  const [delayMinutes, setDelayMinutes] = useState<number>(15)
+  const [delayCascade, setDelayCascade] = useState<boolean>(true)
+
+  const openDelayModal = (lesson: Lesson) => {
+    setDelayModalLesson(lesson)
+    setDelayMinutes(15)
+    setDelayCascade(true)
+  }
+
+  const openCommuteDrawer = () => {
+    setScheduleDrawerOpen(false)
+    setCommuteDrawerOpen(true)
+    commuteForm.setFieldsValue({
+      date: selectedDate,
+      timeRange: [dayjs().hour(12).minute(0), dayjs().hour(13).minute(0)],
+      origin: settings.defaultLocation || '教室 A',
+      destination: '',
+      notes: '',
+    })
+  }
+
+  const submitCommute = (values: CommuteFormValues) => {
+    const [start, end] = values.timeRange
+    addCommute({
+      date: values.date.format('YYYY-MM-DD'),
+      startTime: start.format('HH:mm'),
+      endTime: end.format('HH:mm'),
+      origin: values.origin.trim(),
+      destination: values.destination.trim(),
+      notes: values.notes?.trim() || undefined,
+    })
+    void message.success('已新增通勤排程')
+    setCommuteDrawerOpen(false)
+    commuteForm.resetFields()
+  }
 
   const selectedStudentId = Form.useWatch('studentId', form)
   const formDate = Form.useWatch('date', form)
@@ -160,6 +214,42 @@ export default function CalendarPage() {
         { label: '其他系統課程種類', options: courseTypes.filter((courseType) => !selectedStudent.subjects.includes(courseType)).map((courseType) => ({ label: courseType, value: courseType })) },
       ]
     : courseTypes.map((courseType) => ({ label: courseType, value: courseType }))
+
+  const selectedCommutes = useMemo(
+    () => commutes.filter((c) => c.date === selectedDate.format('YYYY-MM-DD')).sort((a, b) => a.startTime.localeCompare(b.startTime)),
+    [commutes, selectedDate]
+  )
+
+  const cascadePreviewList = useMemo(() => {
+    if (!delayModalLesson) return []
+    const shiftTime = (time: string, mins: number) => {
+      const [h, m] = time.split(':').map(Number)
+      const total = h * 60 + m + mins
+      const clamped = Math.min(23 * 60 + 59, Math.max(0, total))
+      const newH = Math.floor(clamped / 60)
+      const newM = clamped % 60
+      return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`
+    }
+    const targetDate = delayModalLesson.date
+    const targetStart = delayModalLesson.startTime
+
+    const affected = lessons.filter((l) => {
+      if (l.id === delayModalLesson.id) return true
+      if (delayCascade && l.date === targetDate && l.status === 'scheduled' && l.startTime >= targetStart) {
+        return true
+      }
+      return false
+    }).sort((a, b) => a.startTime.localeCompare(b.startTime))
+
+    return affected.map((l) => ({
+      id: l.id,
+      studentName: l.studentName,
+      subject: l.subject,
+      oldTime: `${l.startTime} - ${l.endTime}`,
+      newTime: `${shiftTime(l.startTime, delayMinutes)} - ${shiftTime(l.endTime, delayMinutes)}`,
+      isTarget: l.id === delayModalLesson.id,
+    }))
+  }, [delayModalLesson, delayMinutes, delayCascade, lessons])
 
   const selectedLessons = useMemo(
     () => lessons.filter((lesson) => lesson.date === selectedDate.format('YYYY-MM-DD')).sort((a, b) => a.startTime.localeCompare(b.startTime)),
@@ -466,13 +556,28 @@ export default function CalendarPage() {
                 </Tag>
               ) : null}
             </Space>
-            <div className="lesson-meta"><EnvironmentOutlined /> {lesson.location}</div>
+            <div className="lesson-meta">
+              <EnvironmentOutlined /> {lesson.location}
+              {lesson.location && !lesson.location.includes('線上') ? (
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<CompassOutlined />}
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lesson.location)}`}
+                  target="_blank"
+                  style={{ padding: '0 4px', height: 'auto', fontSize: 13, marginLeft: 6 }}
+                >
+                  導航
+                </Button>
+              ) : null}
+            </div>
           </div>
           <Space size={6} className="lesson-actions">
             {lesson.status === 'scheduled' ? (
               <>
                 <Button type="primary" size="small" onClick={() => { updateLessonStatus(lesson.id, 'completed'); void message.success('已標記為完課') }}>完課</Button>
                 <Button danger size="small" onClick={() => { updateLessonStatus(lesson.id, 'leave'); void message.info('已標記為請假') }}>請假</Button>
+                <Button size="small" icon={<FieldTimeOutlined />} onClick={() => openDelayModal(lesson)}>順延</Button>
               </>
             ) : lesson.status === 'completed' ? (
               <Tag color="success">已完課</Tag>
@@ -576,6 +681,7 @@ export default function CalendarPage() {
             </Flex>
             <Flex gap={8} wrap="wrap" style={{ marginTop: 12 }}>
               <Tag color="blue">當日共 {selectedLessons.length} 堂</Tag>
+              {selectedCommutes.length > 0 && <Tag color="orange">通勤 {selectedCommutes.length} 趟</Tag>}
               <Tag color="success">
                 已完課 {selectedLessons.filter((l) => l.status === 'completed').length} 堂
               </Tag>
@@ -612,6 +718,10 @@ export default function CalendarPage() {
                   const startH = parseInt(l.startTime.split(':')[0], 10)
                   return startH === hour
                 })
+                const hourCommutes = selectedCommutes.filter((c) => {
+                  const startH = parseInt(c.startTime.split(':')[0], 10)
+                  return startH === hour
+                })
 
                 return (
                   <div key={hour} className="day-timeline-row">
@@ -619,6 +729,43 @@ export default function CalendarPage() {
                       {String(hour).padStart(2, '0')}:00
                     </div>
                     <div className="day-timeline-content">
+                      {hourCommutes.map((commute) => (
+                        <div key={commute.id} className="day-timeline-commute-item">
+                          <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
+                            <Space size={8} wrap align="center">
+                              <Tag color="orange" style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>
+                                🚗 {commute.startTime} - {commute.endTime}
+                              </Tag>
+                              <Typography.Text strong style={{ fontSize: 14 }}>
+                                通勤：{commute.origin} ➔ {commute.destination}
+                              </Typography.Text>
+                              {commute.notes ? <Tag>{commute.notes}</Tag> : null}
+                            </Space>
+                            <Space size={4}>
+                              <Button
+                                type="link"
+                                size="small"
+                                icon={<CompassOutlined />}
+                                href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(commute.origin)}&destination=${encodeURIComponent(commute.destination)}`}
+                                target="_blank"
+                              >
+                                導航
+                              </Button>
+                              <Popconfirm
+                                title="確定刪除此通勤排程？"
+                                okText="刪除"
+                                cancelText="取消"
+                                onConfirm={() => {
+                                  deleteCommute(commute.id)
+                                  void message.success('已刪除通勤排程')
+                                }}
+                              >
+                                <Button danger type="text" size="small">刪除</Button>
+                              </Popconfirm>
+                            </Space>
+                          </Flex>
+                        </div>
+                      ))}
                       {hourLessons.length > 0 ? (
                         hourLessons.map((lesson) => {
                           const student = students.find((s) => s.id === lesson.studentId)
@@ -692,6 +839,13 @@ export default function CalendarPage() {
                                       >
                                         請假
                                       </Button>
+                                      <Button
+                                        size="small"
+                                        icon={<FieldTimeOutlined />}
+                                        onClick={() => openDelayModal(lesson)}
+                                      >
+                                        順延
+                                      </Button>
                                     </>
                                   )}
                                   <Button size="small" onClick={() => openEditLesson(lesson)}>
@@ -723,8 +877,20 @@ export default function CalendarPage() {
                                   )}
                                 </Space>
                               </Flex>
-                              <div style={{ marginTop: 6, color: '#8c8c8c', fontSize: 13 }}>
-                                <EnvironmentOutlined /> {lesson.location}
+                              <div style={{ marginTop: 6, color: '#8c8c8c', fontSize: 13, display: 'flex', alignItems: 'center' }}>
+                                <EnvironmentOutlined /> <span style={{ marginLeft: 4 }}>{lesson.location}</span>
+                                {lesson.location && !lesson.location.includes('線上') ? (
+                                  <Button
+                                    type="link"
+                                    size="small"
+                                    icon={<CompassOutlined />}
+                                    href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lesson.location)}`}
+                                    target="_blank"
+                                    style={{ padding: '0 4px', height: 'auto', fontSize: 13, marginLeft: 6 }}
+                                  >
+                                    導航
+                                  </Button>
+                                ) : null}
                                 {lesson.notes ? ` · 備註：${lesson.notes}` : ''}
                               </div>
                               {student?.teachingNotes ? (
@@ -737,7 +903,7 @@ export default function CalendarPage() {
                             </div>
                           )
                         })
-                      ) : (
+                      ) : hourCommutes.length === 0 ? (
                         <div
                           className="day-timeline-empty"
                           onClick={() => openNewLessonForSlot(selectedDate, hour)}
@@ -754,7 +920,7 @@ export default function CalendarPage() {
                             排課
                           </Button>
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 )
@@ -867,6 +1033,7 @@ export default function CalendarPage() {
                   const dateStr = day.format('YYYY-MM-DD')
                   const isToday = day.isSame(dayjs(), 'day')
                   const dayLessons = lessons.filter((l) => l.date === dateStr)
+                  const dayCommutes = commutes.filter((c) => c.date === dateStr)
 
                   return (
                     <div
@@ -901,6 +1068,38 @@ export default function CalendarPage() {
                             }}
                           />
                         )}
+
+                      {/* 通勤色塊區塊 */}
+                      {dayCommutes.map((commute) => {
+                        const [sh, sm] = commute.startTime.split(':').map(Number)
+                        const [eh, em] = commute.endTime.split(':').map(Number)
+                        const startMin = (sh - TIMELINE_START_HOUR) * 60 + sm
+                        const durationMin = Math.max(25, eh * 60 + em - (sh * 60 + sm))
+                        const top = Math.max(0, (startMin / 60) * HOUR_ROW_HEIGHT)
+                        const height = Math.max(24, (durationMin / 60) * HOUR_ROW_HEIGHT - 2)
+
+                        return (
+                          <Tooltip
+                            key={commute.id}
+                            title={`🚗 通勤 ${commute.startTime}-${commute.endTime}：${commute.origin} ➔ ${commute.destination}${commute.notes ? ` (${commute.notes})` : ''}`}
+                          >
+                            <div
+                              className="week-commute-block"
+                              style={{ top: `${top}px`, height: `${height}px` }}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                window.open(
+                                  `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(commute.origin)}&destination=${encodeURIComponent(commute.destination)}`,
+                                  '_blank'
+                                )
+                              }}
+                            >
+                              <div className="week-block-time">🚗 ${commute.startTime}-${commute.endTime}</div>
+                              <div className="week-block-title">${commute.origin} ➔ ${commute.destination}</div>
+                            </div>
+                          </Tooltip>
+                        )
+                      })}
 
                       {/* 課堂色塊區塊 */}
                       {dayLessons.map((lesson) => {
@@ -999,7 +1198,7 @@ export default function CalendarPage() {
       <Drawer title="新增排程" placement="right" width={320} open={scheduleDrawerOpen} onClose={() => setScheduleDrawerOpen(false)}>
         <Space direction="vertical" size={12} className="schedule-menu">
           <Button type="primary" block onClick={() => { setScheduleDrawerOpen(false); openNewLesson() }}>排課</Button>
-          <Button block onClick={() => { setScheduleDrawerOpen(false); setCommuteDrawerOpen(true) }}>通勤</Button>
+          <Button block onClick={openCommuteDrawer}>通勤</Button>
           <Button type="text" size="small" block onClick={() => setScheduleDrawerOpen(false)}>其他排程</Button>
         </Space>
       </Drawer>
@@ -1186,15 +1385,201 @@ export default function CalendarPage() {
           </Form.Item>
         </Form>
       </Drawer>
-      <Drawer title="新增通勤" placement="right" width={400} open={commuteDrawerOpen} onClose={() => setCommuteDrawerOpen(false)} extra={<Button type="primary" onClick={() => setCommuteDrawerOpen(false)}>新增</Button>}>
-        <Typography.Paragraph type="secondary">通勤排程 UI 預覽。</Typography.Paragraph>
-        <Form layout="vertical" className="form-stack">
-          <Form.Item label="日期"><DatePicker style={{ width: '100%' }} /></Form.Item>
-          <Form.Item label="起訖時間"><TimePicker.RangePicker style={{ width: '100%' }} format="HH:mm" /></Form.Item>
-          <Form.Item label="出發地"><Input /></Form.Item>
-          <Form.Item label="目的地"><Input /></Form.Item>
+      <Drawer
+        title={
+          <Space>
+            <span>🚗 新增通勤行程</span>
+          </Space>
+        }
+        placement="right"
+        width={420}
+        open={commuteDrawerOpen}
+        onClose={() => setCommuteDrawerOpen(false)}
+        footer={
+          <Flex justify="flex-end" gap={8}>
+            <Button onClick={() => setCommuteDrawerOpen(false)}>取消</Button>
+            <Button type="primary" onClick={() => commuteForm.submit()}>
+              新增通勤
+            </Button>
+          </Flex>
+        }
+      >
+        <Typography.Paragraph type="secondary" style={{ fontSize: 13 }}>
+          規劃跨點授課通勤時間，支援一鍵開啟 Google 地圖路線導航。
+        </Typography.Paragraph>
+        <Form
+          form={commuteForm}
+          layout="vertical"
+          className="form-stack"
+          onFinish={submitCommute}
+        >
+          <Form.Item name="date" label="通勤日期" rules={[{ required: true, message: '請選擇日期' }]}>
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="timeRange" label="預計通勤時段" rules={[{ required: true, message: '請選擇時段' }]}>
+            <TimePicker.RangePicker style={{ width: '100%' }} format="HH:mm" />
+          </Form.Item>
+          <Form.Item name="origin" label="出發地點 (A)" rules={[{ required: true, message: '請輸入出發地' }]}>
+            <Input placeholder="例如：教室 A 或 台北車站" />
+          </Form.Item>
+          <Form.Item name="destination" label="抵達目的地 (B)" rules={[{ required: true, message: '請輸入目的地' }]}>
+            <Input placeholder="例如：到府授課・中山區" />
+          </Form.Item>
+          {commuteOrigin && commuteDestination ? (
+            <div style={{ marginBottom: 16 }}>
+              <Button
+                type="dashed"
+                block
+                icon={<CompassOutlined />}
+                href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(commuteOrigin)}&destination=${encodeURIComponent(commuteDestination)}`}
+                target="_blank"
+              >
+                在 Google Maps 規劃路線 (A ➔ B)
+              </Button>
+            </div>
+          ) : null}
+          <Form.Item name="notes" label="交通備註">
+            <Input.TextArea rows={2} placeholder="例如：搭捷運淡水信義線轉 287 公車" />
+          </Form.Item>
         </Form>
+
+        {selectedCommutes.length > 0 && (
+          <div style={{ marginTop: 24, borderTop: '1px solid rgba(15, 23, 42, .08)', paddingTop: 16 }}>
+            <Typography.Text strong style={{ fontSize: 13 }}>
+              {selectedDate.format('MM/DD')} 已排定通勤：
+            </Typography.Text>
+            <List
+              size="small"
+              style={{ marginTop: 8 }}
+              dataSource={selectedCommutes}
+              renderItem={(c) => (
+                <List.Item
+                  actions={[
+                    <Button
+                      key="nav"
+                      type="link"
+                      size="small"
+                      icon={<CompassOutlined />}
+                      href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(c.origin)}&destination=${encodeURIComponent(c.destination)}`}
+                      target="_blank"
+                      style={{ padding: 0 }}
+                    >
+                      導航
+                    </Button>,
+                    <Popconfirm
+                      key="del"
+                      title="確定刪除此通勤排程？"
+                      onConfirm={() => {
+                        deleteCommute(c.id)
+                        void message.success('已刪除通勤排程')
+                      }}
+                    >
+                      <Button danger type="text" size="small" style={{ padding: 0 }}>刪除</Button>
+                    </Popconfirm>,
+                  ]}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <Tag color="orange" style={{ margin: 0, marginRight: 6 }}>{c.startTime}-{c.endTime}</Tag>
+                    <span style={{ fontSize: 13 }}>{c.origin} ➔ {c.destination}</span>
+                  </div>
+                </List.Item>
+              )}
+            />
+          </div>
+        )}
       </Drawer>
+
+      {/* 課堂延誤 / 骨牌一鍵順延 Modal */}
+      <Modal
+        title={
+          <Space>
+            <FieldTimeOutlined style={{ color: '#f59e0b', fontSize: 18 }} />
+            <span>課堂延誤 / 骨牌一鍵順延</span>
+          </Space>
+        }
+        open={Boolean(delayModalLesson)}
+        onCancel={() => setDelayModalLesson(null)}
+        onOk={() => {
+          if (delayModalLesson) {
+            delayLessons({
+              targetLessonId: delayModalLesson.id,
+              delayMinutes,
+              cascadeSubsequent: delayCascade,
+            })
+            void message.success(`已順延 ${delayMinutes} 分鐘${delayCascade ? '（已骨牌連動後續所有排課）' : ''}`)
+            setDelayModalLesson(null)
+          }
+        }}
+        okText="確認順延"
+        cancelText="取消"
+      >
+        <Typography.Paragraph type="secondary" style={{ fontSize: 13, marginBottom: 12 }}>
+          上課拖堂或交通延誤時，快速順延時間，並可自動推遲今日後續所有課程，避免手動一一調整。
+        </Typography.Paragraph>
+
+        <div style={{ marginBottom: 16 }}>
+          <Typography.Text strong>順延時間長度：</Typography.Text>
+          <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {[10, 15, 20, 30, 45].map((mins) => (
+              <Button
+                key={mins}
+                type={delayMinutes === mins ? 'primary' : 'default'}
+                size="small"
+                onClick={() => setDelayMinutes(mins)}
+              >
+                +{mins} 分鐘
+              </Button>
+            ))}
+            <InputNumber
+              min={1}
+              max={180}
+              value={delayMinutes}
+              onChange={(val) => setDelayMinutes(val ?? 15)}
+              style={{ width: 100 }}
+              addonAfter="分"
+              size="small"
+            />
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <Typography.Text strong>順延範圍：</Typography.Text>
+          <Radio.Group
+            value={delayCascade}
+            onChange={(e) => setDelayCascade(e.target.value as boolean)}
+            style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}
+          >
+            <Radio value={true}>
+              <strong>連動順延此堂及今日後續所有課程（骨牌連動）</strong>
+              <div style={{ fontSize: 12, color: '#8c8c8c' }}>推薦：後續課程將全部同步往後推遲 {delayMinutes} 分鐘</div>
+            </Radio>
+            <Radio value={false}>
+              <strong>僅順延此堂課</strong>
+              <div style={{ fontSize: 12, color: '#8c8c8c' }}>僅變動本堂時間，後續排程保持原樣</div>
+            </Radio>
+          </Radio.Group>
+        </div>
+
+        {cascadePreviewList.length > 0 && (
+          <div>
+            <Typography.Text strong style={{ fontSize: 13 }}>調整前後預覽對照：</Typography.Text>
+            <div style={{ maxHeight: 180, overflowY: 'auto', marginTop: 8, border: '1px solid rgba(15, 23, 42, .08)', borderRadius: 8, padding: '8px 12px' }}>
+              {cascadePreviewList.map((item) => (
+                <Flex key={item.id} justify="space-between" align="center" style={{ padding: '4px 0', borderBottom: '1px dashed rgba(15, 23, 42, .06)' }}>
+                  <div>
+                    <Typography.Text strong={item.isTarget}>{item.studentName}</Typography.Text>
+                    <Tag style={{ marginLeft: 6 }} color="blue">{item.subject}</Tag>
+                  </div>
+                  <Space size={8}>
+                    <span style={{ textDecoration: 'line-through', color: '#94a3b8', fontSize: 13 }}>{item.oldTime}</span>
+                    <span style={{ color: '#1677ff', fontWeight: 700, fontSize: 13 }}>➔ {item.newTime}</span>
+                  </Space>
+                </Flex>
+              ))}
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* 週期性課程刪除確認 Modal（受控狀態，保證在任何情境下都能穩定彈出） */}
       <Modal

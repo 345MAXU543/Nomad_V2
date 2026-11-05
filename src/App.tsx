@@ -23,6 +23,7 @@ function App() {
     <ConfigProvider
       locale={antdLocale}
       theme={{
+        cssVar: true,
         algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
         token: {
           borderRadius: 12,
