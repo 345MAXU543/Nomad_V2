@@ -40,8 +40,6 @@ import { useAppStore } from '../store/useAppStore'
 import { requestNotificationPermission, sendNotification } from '../utils/notifications'
 import type { Lesson, PaymentStatus, Student } from '../types'
 
-const statusText = { scheduled: '待上課', completed: '已完課', leave: '請假' } as const
-
 const isTimeOverlapping = (startA: string, endA: string, startB: string, endB: string): boolean => {
   return startA < endB && endA > startB
 }
@@ -103,7 +101,7 @@ export default function DashboardPage() {
   const today = dayjs().format('YYYY-MM-DD')
   const todayLessons = lessons.filter((lesson) => lesson.date === today)
   const upcoming = todayLessons.filter((lesson) => lesson.status === 'scheduled').sort((a, b) => a.startTime.localeCompare(b.startTime))
-  const pending = lessons.filter((lesson) => lesson.status === 'scheduled' && lesson.date <= today).sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`))
+  const pending = lessons.filter((lesson) => lesson.status === 'scheduled' && lesson.date < today).sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`))
   const pendingMakeups = lessons.filter((lesson) => lesson.status === 'leave' && !lesson.rescheduledLessonId).sort((a, b) => b.date.localeCompare(a.date))
 
   const todayActiveLessons = todayLessons.filter((lesson) => lesson.status !== 'leave')
@@ -306,7 +304,9 @@ export default function DashboardPage() {
                           )}
                         </div>
                       </div>
-                      <Space size={8} align="center">
+                      <Space size={6} wrap align="center" className="lesson-actions">
+                        <Button type="primary" size="small" onClick={() => markStatus(lesson.id, 'completed')}>完課</Button>
+                        <Button danger size="small" onClick={() => markStatus(lesson.id, 'leave')}>請假</Button>
                         <Button
                           ref={index === 0 ? refTourDelay : undefined}
                           size="small"
@@ -316,7 +316,6 @@ export default function DashboardPage() {
                         >
                           順延
                         </Button>
-                        <Badge status="processing" text={statusText[lesson.status]} />
                       </Space>
                     </div>
                     {student?.teachingNotes ? (

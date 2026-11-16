@@ -337,8 +337,8 @@ export default function StudentsPage() {
                             )}
                             {l.isMakeup ? <Tag color="cyan">補課</Tag> : null}
                             {l.fee !== undefined ? (
-                              <Tag color={l.paymentStatus === 'paid' ? 'success' : 'default'}>
-                                NT$ {l.fee.toLocaleString()} · {l.paymentStatus === 'paid' ? '已收' : '待收'}
+                              <Tag color={l.paymentStatus === 'paid' ? 'success' : l.paymentStatus === 'waived' ? 'default' : 'warning'}>
+                                NT$ {l.fee.toLocaleString()} · {l.paymentStatus === 'paid' ? '已收' : l.paymentStatus === 'waived' ? '包月/免收' : '待收'}
                               </Tag>
                             ) : null}
                           </Space>

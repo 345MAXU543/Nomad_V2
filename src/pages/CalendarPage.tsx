@@ -105,6 +105,60 @@ const isTimeOverlapping = (startA: string, endA: string, startB: string, endB: s
   return startA < endB && endA > startB
 }
 
+type TimelineEventInterval = { id: string; startMin: number; endMin: number }
+
+const parseMinutes = (time: string) => {
+  const [h, m] = time.split(':').map(Number)
+  return h * 60 + m
+}
+
+/** 將同一天內時段重疊的課程與通勤色塊分配為並排欄位，避免互相覆蓋 */
+const layoutDayEvents = (events: TimelineEventInterval[]) => {
+  const layoutMap = new Map<string, { col: number; totalCols: number }>()
+  if (events.length === 0) return layoutMap
+
+  const sorted = [...events].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin)
+  let cluster: TimelineEventInterval[] = []
+  let clusterMaxEnd = -1
+
+  const flushCluster = () => {
+    if (cluster.length === 0) return
+    const colEnds: number[] = []
+    const assignments: { id: string; col: number }[] = []
+
+    for (const item of cluster) {
+      let assignedCol = colEnds.findIndex((end) => end <= item.startMin)
+      if (assignedCol === -1) {
+        assignedCol = colEnds.length
+        colEnds.push(item.endMin)
+      } else {
+        colEnds[assignedCol] = item.endMin
+      }
+      assignments.push({ id: item.id, col: assignedCol })
+    }
+
+    const totalCols = colEnds.length
+    for (const { id, col } of assignments) {
+      layoutMap.set(id, { col, totalCols })
+    }
+    cluster = []
+    clusterMaxEnd = -1
+  }
+
+  for (const ev of sorted) {
+    if (cluster.length === 0 || ev.startMin < clusterMaxEnd) {
+      cluster.push(ev)
+      clusterMaxEnd = Math.max(clusterMaxEnd, ev.endMin)
+    } else {
+      flushCluster()
+      cluster.push(ev)
+      clusterMaxEnd = ev.endMin
+    }
+  }
+  flushCluster()
+  return layoutMap
+}
+
 const findConflicts = (
   date: string,
   startTime: string,
@@ -1119,6 +1173,27 @@ export default function CalendarPage() {
                   const isToday = day.isSame(dayjs(), 'day')
                   const dayLessons = lessons.filter((l) => l.date === dateStr)
                   const dayCommutes = commutes.filter((c) => c.date === dateStr)
+                  const dayLayout = layoutDayEvents([
+                    ...dayCommutes.map((c) => {
+                      const s = parseMinutes(c.startTime)
+                      return { id: `commute-${c.id}`, startMin: s, endMin: Math.max(s + 25, parseMinutes(c.endTime)) }
+                    }),
+                    ...dayLessons.map((l) => {
+                      const s = parseMinutes(l.startTime)
+                      return { id: `lesson-${l.id}`, startMin: s, endMin: Math.max(s + 30, parseMinutes(l.endTime)) }
+                    }),
+                  ])
+                  const getColumnStyle = (eventKey: string) => {
+                    const pos = dayLayout.get(eventKey)
+                    if (!pos || pos.totalCols <= 1) {
+                      return { left: '3px', width: 'calc(100% - 6px)', right: 'auto' as const }
+                    }
+                    return {
+                      left: `calc(${(pos.col / pos.totalCols) * 100}% + 2px)`,
+                      width: `calc(${100 / pos.totalCols}% - 4px)`,
+                      right: 'auto' as const,
+                    }
+                  }
 
                   return (
                     <div
@@ -1170,7 +1245,7 @@ export default function CalendarPage() {
                           >
                             <div
                               className="week-commute-block"
-                              style={{ top: `${top}px`, height: `${height}px` }}
+                              style={{ top: `${top}px`, height: `${height}px`, ...getColumnStyle(`commute-${commute.id}`) }}
                               onClick={(e) => {
                                 e.stopPropagation()
                                 window.open(
@@ -1179,8 +1254,8 @@ export default function CalendarPage() {
                                 )
                               }}
                             >
-                              <div className="week-block-time">🚗 ${commute.startTime}-${commute.endTime}</div>
-                              <div className="week-block-title">${commute.origin} ➔ ${commute.destination}</div>
+                              <div className="week-block-time">🚗 {commute.startTime}-{commute.endTime}</div>
+                              <div className="week-block-title">{commute.origin} ➔ {commute.destination}</div>
                             </div>
                           </Tooltip>
                         )
@@ -1202,7 +1277,7 @@ export default function CalendarPage() {
                           >
                             <div
                               className={`week-lesson-block status-${lesson.status}`}
-                              style={{ top: `${top}px`, height: `${height}px` }}
+                              style={{ top: `${top}px`, height: `${height}px`, ...getColumnStyle(`lesson-${lesson.id}`) }}
                               onClick={(e) => {
                                 e.stopPropagation()
                                 openEditLesson(lesson)

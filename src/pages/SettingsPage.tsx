@@ -21,6 +21,7 @@ export default function SettingsPage() {
   const loadDemoState = useAppStore((state) => state.loadDemoState)
   const students = useAppStore((state) => state.students)
   const lessons = useAppStore((state) => state.lessons)
+  const commutes = useAppStore((state) => state.commutes)
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const addCourseType = useAppStore((state) => state.addCourseType)
@@ -47,7 +48,7 @@ export default function SettingsPage() {
     renameCourseType(oldName, name); setRenamingCourseType(null); void message.success('課程種類已改名')
   }
   const exportData = () => {
-    const body = JSON.stringify({ students, lessons, settings, exportedAt: new Date().toISOString() }, null, 2)
+    const body = JSON.stringify({ students, lessons, commutes, settings, exportedAt: new Date().toISOString() }, null, 2)
     const url = URL.createObjectURL(new Blob([body], { type: 'application/json' }))
     const anchor = document.createElement('a'); anchor.href = url; anchor.download = `nomad-backup-${dayjs().format('YYYYMMDD')}.json`; anchor.click(); URL.revokeObjectURL(url)
     void message.success('JSON 備份檔已匯出')
@@ -58,7 +59,12 @@ export default function SettingsPage() {
     try {
       const payload: unknown = JSON.parse(await file.text())
       if (!isBackupPayload(payload)) throw new Error('invalid backup')
-      importData({ students: payload.students as Student[], lessons: payload.lessons as Lesson[], settings: payload.settings })
+      importData({
+        students: payload.students as Student[],
+        lessons: payload.lessons as Lesson[],
+        commutes: Array.isArray(payload.commutes) ? payload.commutes : [],
+        settings: payload.settings,
+      })
       void message.success('備份資料匯入成功')
     } catch { void message.error('備份格式錯誤，請選擇有效的 JSON 檔案') }
     event.target.value = ''
