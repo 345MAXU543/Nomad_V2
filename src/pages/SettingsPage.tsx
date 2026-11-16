@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import dayjs from 'dayjs'
-import { Button, Card, Flex, Form, Input, InputNumber, List, Modal, Popconfirm, Select, Space, Switch, Tag, Typography, message } from 'antd'
+import { Button, Card, Flex, Form, Input, InputNumber, List, Popconfirm, Select, Space, Switch, Tag, Typography, message } from 'antd'
 import { BellOutlined, BulbOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined, SyncOutlined, UploadOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../store/useAppStore'
@@ -183,6 +183,6 @@ export default function SettingsPage() {
         </Popconfirm>
       </Space>
     </Card>
-    <Card className="surface-card setting-card" title="本地資料備份"><Typography.Paragraph type="secondary">資料只儲存在此瀏覽器，可用 JSON 備份檔跨裝置或復原。</Typography.Paragraph><input ref={fileInputRef} type="file" accept=".json,application/json" hidden onChange={importFile} /><Space wrap><Button icon={<DownloadOutlined />} onClick={exportData}>匯出 JSON 備份檔</Button><Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>匯入備份檔</Button><Button danger onClick={() => Modal.confirm({ title: '重置所有資料？', content: '目前的學員、課程與設定將被初始測試資料取代。', okText: '重置', cancelText: '取消', okButtonProps: { danger: true }, onOk: () => { resetToDefault(); void message.success('已重置為初始資料') } })}>重置所有資料</Button></Space></Card>
+    <Card className="surface-card setting-card" title="本地資料備份"><Typography.Paragraph type="secondary">資料只儲存在此瀏覽器，可用 JSON 備份檔跨裝置或復原。</Typography.Paragraph><input ref={fileInputRef} type="file" accept=".json,application/json" hidden onChange={importFile} /><Space wrap><Button icon={<DownloadOutlined />} onClick={exportData}>匯出 JSON 備份檔</Button><Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>匯入備份檔</Button><Popconfirm title="重置所有資料？" description="目前的學員、課程與設定將被初始測試資料取代。" okText="重置" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={() => { resetToDefault(); void message.success('已重置為初始資料') }}><Button danger>重置所有資料</Button></Popconfirm></Space></Card>
   </>
 }
